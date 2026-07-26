@@ -1,16 +1,3 @@
 {
-  "scores": [
-    {
-      "name": "ABA",
-      "score": 54930
-    },
-    {
-      "name": "ABC",
-      "score": 39760
-    },
-    {
-      "name": "CAB",
-      "score": 26910
-    }
-  ]
+  "scores": []
 }

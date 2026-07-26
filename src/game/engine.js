@@ -1,4 +1,5 @@
 import { AssetStore, Renderer } from './renderer.js';
+import { fetchTopScores } from '../api/leaderboard.js';
 
 const MAZE_IMAGE = 'app/style/graphics/spriteSheets/maze/maze_blue.svg';
 
@@ -1247,7 +1248,17 @@ class GameCoordinator {
             'click', this.soundButtonClick.bind(this),
         );
 
-
+        // The HIGH SCORE readout mirrors first place on the leaderboard, so it
+        // has to be refreshed whenever the board changes (a new name saved from
+        // ScoreEntry) as well as on load.
+        // Assumed available until a request actually fails, so the readout
+        // starts at 00 rather than briefly flashing a stale stored value.
+        this.leaderboardAvailable = true;
+        this.leaderboardHighScore = 0;
+        window.addEventListener('leaderboardUpdated', () => {
+            this.refreshHighScore();
+        });
+        this.refreshHighScore();
 
         // Built before preloading so the loading screen can decode every audio
         // clip into its buffer cache.
@@ -1508,6 +1519,58 @@ class GameCoordinator {
     }
 
     /**
+     * The high score the readout starts a game at: first place on the shared
+     * leaderboard. Whatever the API says wins, including an empty board - that
+     * means no high score yet, i.e. 0, not this browser's leftover personal
+     * best. The stored value is a fallback for when the API cannot be reached
+     * at all (a static build with no server behind it).
+     * @returns {Number}
+     */
+    baselineHighScore() {
+        if (this.leaderboardAvailable) return this.leaderboardHighScore;
+
+        // getItem returns a string (and literally 'null' for older saves), so
+        // anything non-numeric has to collapse to 0 rather than NaN.
+        const stored = Number(localStorage.getItem('highScore'));
+        return Number.isFinite(stored) && stored > 0 ? stored : 0;
+    }
+
+    /**
+     * Records this browser's personal best, which is only ever read when the
+     * leaderboard API cannot be reached. Never lowers the stored value.
+     */
+    saveLocalBest() {
+        const stored = Number(localStorage.getItem('highScore'));
+        const best = Number.isFinite(stored) ? stored : 0;
+
+        if (this.points > best) {
+            localStorage.setItem('highScore', this.points);
+        }
+    }
+
+    /**
+     * Pulls first place off the leaderboard and repaints the HIGH SCORE
+     * readout. A failed request leaves the current value alone.
+     * @returns {Promise<void>}
+     */
+    refreshHighScore() {
+        return fetchTopScores()
+            .then((scores) => {
+                this.leaderboardAvailable = true;
+                this.leaderboardHighScore = Number(scores?.[0]?.score) || 0;
+            })
+            .catch(() => {
+                this.leaderboardAvailable = false;
+            })
+            .then(() => {
+                this.highScore = Math.max(
+                    this.baselineHighScore(), this.points || 0,
+                );
+                this.highScoreDisplay.innerText = this.highScore || '00';
+            });
+    }
+
+    /**
      * Resets gameCoordinator values to their default states
      */
     reset() {
@@ -1522,7 +1585,7 @@ class GameCoordinator {
         this.allowPacmanMovement = false;
         this.allowPause = false;
         this.cutscene = true;
-        this.highScore = localStorage.getItem('highScore');
+        this.highScore = this.baselineHighScore();
 
         if (this.firstGame) {
             setInterval(() => {
@@ -1970,7 +2033,6 @@ class GameCoordinator {
         if (this.points > (this.highScore || 0)) {
             this.highScore = this.points;
             this.highScoreDisplay.innerText = this.points;
-            localStorage.setItem('highScore', this.highScore);
         }
 
         if (this.points >= 10000 && !this.extraLifeGiven) {
@@ -2065,7 +2127,7 @@ class GameCoordinator {
      * Displays GAME OVER text and displays the menu so players can play again
      */
     gameOver() {
-        localStorage.setItem('highScore', this.highScore);
+        this.saveLocalBest();
 
         // Let the React layer know the run ended and with what score, so it can
         // offer a name entry when the player earns a spot on the leaderboard.
