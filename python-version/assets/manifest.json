@@ -1,0 +1,496 @@
+{
+  "audio": {
+    "death": "audio/death.ogg",
+    "dot_1": "audio/dot_1.ogg",
+    "dot_2": "audio/dot_2.ogg",
+    "eat_ghost": "audio/eat_ghost.ogg",
+    "extra_life": "audio/extra_life.ogg",
+    "eyes": "audio/eyes.ogg",
+    "fruit": "audio/fruit.ogg",
+    "game_start": "audio/game_start.ogg",
+    "pause": "audio/pause.ogg",
+    "pause_beat": "audio/pause_beat.ogg",
+    "power_up": "audio/power_up.ogg",
+    "siren_1": "audio/siren_1.ogg",
+    "siren_2": "audio/siren_2.ogg",
+    "siren_3": "audio/siren_3.ogg"
+  },
+  "sprites": {
+    "100": {
+      "file": "sprites/100.png",
+      "frame_width": 16,
+      "frames": 1,
+      "height": 16,
+      "width": 16
+    },
+    "1000": {
+      "file": "sprites/1000.png",
+      "frame_width": 24,
+      "frames": 1,
+      "height": 16,
+      "width": 24
+    },
+    "1600": {
+      "file": "sprites/1600.png",
+      "frame_width": 16,
+      "frames": 1,
+      "height": 16,
+      "width": 16
+    },
+    "200": {
+      "file": "sprites/200.png",
+      "frame_width": 16,
+      "frames": 1,
+      "height": 16,
+      "width": 16
+    },
+    "2000": {
+      "file": "sprites/2000.png",
+      "frame_width": 24,
+      "frames": 1,
+      "height": 16,
+      "width": 24
+    },
+    "300": {
+      "file": "sprites/300.png",
+      "frame_width": 16,
+      "frames": 1,
+      "height": 16,
+      "width": 16
+    },
+    "3000": {
+      "file": "sprites/3000.png",
+      "frame_width": 24,
+      "frames": 1,
+      "height": 16,
+      "width": 24
+    },
+    "400": {
+      "file": "sprites/400.png",
+      "frame_width": 16,
+      "frames": 1,
+      "height": 16,
+      "width": 16
+    },
+    "500": {
+      "file": "sprites/500.png",
+      "frame_width": 16,
+      "frames": 1,
+      "height": 16,
+      "width": 16
+    },
+    "5000": {
+      "file": "sprites/5000.png",
+      "frame_width": 23,
+      "frames": 1,
+      "height": 16,
+      "width": 23
+    },
+    "700": {
+      "file": "sprites/700.png",
+      "frame_width": 16,
+      "frames": 1,
+      "height": 16,
+      "width": 16
+    },
+    "800": {
+      "file": "sprites/800.png",
+      "frame_width": 16,
+      "frames": 1,
+      "height": 16,
+      "width": 16
+    },
+    "apple": {
+      "file": "sprites/apple.png",
+      "frame_width": 16,
+      "frames": 1,
+      "height": 16,
+      "width": 16
+    },
+    "arrow_down": {
+      "file": "sprites/arrow_down.png",
+      "frame_width": 32,
+      "frames": 1,
+      "height": 32,
+      "width": 32
+    },
+    "arrow_left": {
+      "file": "sprites/arrow_left.png",
+      "frame_width": 32,
+      "frames": 1,
+      "height": 32,
+      "width": 32
+    },
+    "arrow_right": {
+      "file": "sprites/arrow_right.png",
+      "frame_width": 32,
+      "frames": 1,
+      "height": 32,
+      "width": 32
+    },
+    "arrow_up": {
+      "file": "sprites/arrow_up.png",
+      "frame_width": 32,
+      "frames": 1,
+      "height": 32,
+      "width": 32
+    },
+    "backdrop": {
+      "file": "sprites/backdrop.png",
+      "frame_width": 224,
+      "frames": 1,
+      "height": 296,
+      "width": 224
+    },
+    "bell": {
+      "file": "sprites/bell.png",
+      "frame_width": 16,
+      "frames": 1,
+      "height": 16,
+      "width": 16
+    },
+    "blinky_down": {
+      "file": "sprites/blinky_down.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "blinky_down_angry": {
+      "file": "sprites/blinky_down_angry.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "blinky_down_annoyed": {
+      "file": "sprites/blinky_down_annoyed.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "blinky_left": {
+      "file": "sprites/blinky_left.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "blinky_left_angry": {
+      "file": "sprites/blinky_left_angry.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "blinky_left_annoyed": {
+      "file": "sprites/blinky_left_annoyed.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "blinky_right": {
+      "file": "sprites/blinky_right.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "blinky_right_angry": {
+      "file": "sprites/blinky_right_angry.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "blinky_right_annoyed": {
+      "file": "sprites/blinky_right_annoyed.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "blinky_up": {
+      "file": "sprites/blinky_up.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "blinky_up_angry": {
+      "file": "sprites/blinky_up_angry.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "blinky_up_annoyed": {
+      "file": "sprites/blinky_up_annoyed.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "cherry": {
+      "file": "sprites/cherry.png",
+      "frame_width": 16,
+      "frames": 1,
+      "height": 16,
+      "width": 16
+    },
+    "clyde_down": {
+      "file": "sprites/clyde_down.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "clyde_left": {
+      "file": "sprites/clyde_left.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "clyde_right": {
+      "file": "sprites/clyde_right.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "clyde_up": {
+      "file": "sprites/clyde_up.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "extra_life": {
+      "file": "sprites/extra_life.png",
+      "frame_width": 16,
+      "frames": 1,
+      "height": 16,
+      "width": 16
+    },
+    "eyes_down": {
+      "file": "sprites/eyes_down.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "eyes_left": {
+      "file": "sprites/eyes_left.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "eyes_right": {
+      "file": "sprites/eyes_right.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "eyes_up": {
+      "file": "sprites/eyes_up.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "galaxian": {
+      "file": "sprites/galaxian.png",
+      "frame_width": 16,
+      "frames": 1,
+      "height": 16,
+      "width": 16
+    },
+    "game_over": {
+      "file": "sprites/game_over.png",
+      "frame_width": 80,
+      "frames": 1,
+      "height": 16,
+      "width": 80
+    },
+    "inky_down": {
+      "file": "sprites/inky_down.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "inky_left": {
+      "file": "sprites/inky_left.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "inky_right": {
+      "file": "sprites/inky_right.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "inky_up": {
+      "file": "sprites/inky_up.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "key": {
+      "file": "sprites/key.png",
+      "frame_width": 16,
+      "frames": 1,
+      "height": 16,
+      "width": 16
+    },
+    "maze_blue": {
+      "file": "sprites/maze_blue.png",
+      "frame_width": 224,
+      "frames": 1,
+      "height": 248,
+      "width": 224
+    },
+    "melon": {
+      "file": "sprites/melon.png",
+      "frame_width": 16,
+      "frames": 1,
+      "height": 16,
+      "width": 16
+    },
+    "orange": {
+      "file": "sprites/orange.png",
+      "frame_width": 16,
+      "frames": 1,
+      "height": 16,
+      "width": 16
+    },
+    "pacdot": {
+      "file": "sprites/pacdot.png",
+      "frame_width": 2,
+      "frames": 1,
+      "height": 2,
+      "width": 2
+    },
+    "pacman_death": {
+      "file": "sprites/pacman_death.png",
+      "frame_width": 16,
+      "frames": 12,
+      "height": 16,
+      "width": 192
+    },
+    "pacman_down": {
+      "file": "sprites/pacman_down.png",
+      "frame_width": 16,
+      "frames": 4,
+      "height": 16,
+      "width": 64
+    },
+    "pacman_error": {
+      "file": "sprites/pacman_error.png",
+      "frame_width": 16,
+      "frames": 12,
+      "height": 16,
+      "width": 192
+    },
+    "pacman_left": {
+      "file": "sprites/pacman_left.png",
+      "frame_width": 16,
+      "frames": 4,
+      "height": 16,
+      "width": 64
+    },
+    "pacman_logo": {
+      "file": "sprites/pacman_logo.png",
+      "frame_width": 175,
+      "frames": 1,
+      "height": 42,
+      "width": 175
+    },
+    "pacman_right": {
+      "file": "sprites/pacman_right.png",
+      "frame_width": 16,
+      "frames": 4,
+      "height": 16,
+      "width": 64
+    },
+    "pacman_up": {
+      "file": "sprites/pacman_up.png",
+      "frame_width": 16,
+      "frames": 4,
+      "height": 16,
+      "width": 64
+    },
+    "pinky_down": {
+      "file": "sprites/pinky_down.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "pinky_left": {
+      "file": "sprites/pinky_left.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "pinky_right": {
+      "file": "sprites/pinky_right.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "pinky_up": {
+      "file": "sprites/pinky_up.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "powerPellet": {
+      "file": "sprites/powerPellet.png",
+      "frame_width": 8,
+      "frames": 1,
+      "height": 8,
+      "width": 8
+    },
+    "ready": {
+      "file": "sprites/ready.png",
+      "frame_width": 48,
+      "frames": 1,
+      "height": 16,
+      "width": 48
+    },
+    "scared_blue": {
+      "file": "sprites/scared_blue.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "scared_white": {
+      "file": "sprites/scared_white.png",
+      "frame_width": 16,
+      "frames": 2,
+      "height": 16,
+      "width": 32
+    },
+    "strawberry": {
+      "file": "sprites/strawberry.png",
+      "frame_width": 16,
+      "frames": 1,
+      "height": 16,
+      "width": 16
+    }
+  }
+}
