@@ -1,4 +1,4 @@
-# Pacman Compete
+# Pacman Remake
 
 This is a remake of pacman. There are two versions: nodejs (pnpm) and python (pygame).
 
