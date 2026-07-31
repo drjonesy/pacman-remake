@@ -68,17 +68,18 @@ it lives in `data/pad_mapping.json` and is written by stepping on each panel.
 **On the Pi, with the pad plugged in:**
 
 ```bash
-.venv/bin/python tools/pad_report.py                 # walk all 10 panels, write a report
+.venv/bin/python tools/pad_report.py                 # walk all 11 panels, write a report
 .venv/bin/python tools/gamepad_test.py --list        # what SDL can see
 .venv/bin/python tools/gamepad_test.py               # live event monitor
 .venv/bin/python tools/gamepad_test.py --calibrate   # step on each panel
 ```
 
 [`tools/pad_report.py`](tools/pad_report.py) is the one to reach for first when
-a pad misbehaves. It walks all ten panels one at a time, **waiting for ENTER
-between each** rather than racing ahead — so there is time to read what a panel
-recorded, and `r` re-records it if the step did not land. `q` stops early and
-still writes everything reached; `--auto` advances unattended.
+a pad misbehaves. It walks all eleven panels — the ten labelled ones plus the
+centre — one at a time, **waiting for ENTER between each** rather than racing
+ahead, so there is time to read what a panel recorded; `r` re-records it if the
+step did not land. `q` stops early and still writes everything reached;
+`--auto` advances unattended.
 
 | At the prompt | |
 |---|---|
@@ -107,8 +108,8 @@ mapping file without the raw log. For a DDR mat the prompts map to:
 | pause | **SELECT** | Pause during play |
 | mute | **□** | Toggle sound |
 
-It leaves `○` and `△` unbound — `pad_report.py` is the one that covers all ten
-panels. Press ESC (or wait) at any prompt to skip it. Either way, an action
+It leaves `○`, `△` and the centre unbound — `pad_report.py` is the one that
+covers every panel. Press ESC (or wait) at any prompt to skip it. Either way, an action
 takes a *list*, so a second button can be added by hand:
 
 ```json
@@ -153,7 +154,15 @@ PSX-to-USB board** (USB `0079:0006`, `Name="Microntek USB Joystick"`) wired to a
 
 Buttons 10 and 11 exist on the board but nothing on the mat is wired to them.
 
-Two things about this are worth knowing, because they are not what a gamepad
+**The centre of the mat is an eleventh sensor**, and it is deliberately left
+unbound. It does not report as a button — stepping on it sends `axis 1 +1.0`,
+and stepping off returns the axis to `0`. That is the neutral spot the player
+stands on between moves, so it fires every few seconds during normal play;
+anything bound to it would pause, mute or turn constantly. `pad_report.py` walks
+it last, calls it out in the summary, and refuses to put that control in a
+generated mapping even if another panel also reports it.
+
+Three things about this are worth knowing, because none is what a gamepad
 would do:
 
 - **The arrows are buttons, not the hat.** The descriptor advertises a hat and
@@ -161,10 +170,13 @@ would do:
   them on a mat. On a PlayStation dance pad the arrow panels *are* the face
   buttons, and the corner shape panels take the shoulder indices — which is
   exactly the order above.
-- **No direction is bound to an axis.** This board parks its unused analogue
-  axes at full deflection often enough that a direction bound to one would
-  steer the game with nobody standing on the mat. Hat bindings are kept so an
-  ordinary gamepad or arcade encoder still works; axis bindings are not.
+- **Nothing is bound to an axis.** Between the centre sensor sitting on axis 1
+  and this board's habit of parking unused analogue axes at full deflection,
+  an axis binding is a liability here — `axis 1 +` is precisely what a naive
+  `down` binding would have picked, and it would have driven Pac-Man downward
+  every time the player stood still. Hat bindings are kept so an ordinary
+  gamepad or arcade encoder still works; axis bindings are not.
+  [`tests/test_gamepad.py`](tests/test_gamepad.py) pins this.
 
 A different mat will differ — calibrating replaces all of this. To confirm the
 numbering independently of pygame:
@@ -275,7 +287,7 @@ pacman/
 tools/convert_assets.py    build-time SVG->PNG, MP3->OGG
 tools/gamepad_test.py      pad identification + calibration
 tools/pad_report.py        per-panel raw event log (standalone; pygame only)
-tests/                     302 tests
+tests/                     304 tests
 ```
 
 The browser's `window.dispatchEvent` messaging is replaced by a small internal
@@ -378,7 +390,7 @@ way to turn the machine off.
 .venv/bin/python -m pytest tests/ -q
 ```
 
-302 tests, all headless — no display and no audio device required. Coverage is
+304 tests, all headless — no display and no audio device required. Coverage is
 aimed at what is easy to break and hard to spot: ghost-house respawn at 120Hz
 from all four corners, ghost targeting per ghost per mode (including Inky's
 mirror math and Clyde's 8-tile flip), the scared-mode distance inversion, the

@@ -47,6 +47,12 @@ PANELS = (
     ('CIRCLE',   'the O panel',              'select'),
     ('SQUARE',   'the SQUARE panel',         'mute'),
     ('TRIANGLE', 'the TRIANGLE panel',       'pause'),
+    # Recorded, never bound. On a mat the centre is where the player stands
+    # between moves, so a sensor there fires constantly during normal play -
+    # binding it to anything would mean pausing or muting every few seconds.
+    # Worth knowing whether it exists, and what it reports, precisely so that
+    # nothing else gets bound to the same control by accident.
+    ('CENTRE',   'the CENTRE of the mat',    None),
 )
 
 # Stop recording a panel once it has been quiet this long. Long enough to catch
@@ -462,11 +468,18 @@ def build_mapping(results, deadzone):
     Several panels share one action on purpose (START and O both select), so
     bindings accumulate per action rather than replacing.
     """
+    # Anything the centre reports is poison: the player stands there between
+    # moves, so a binding on it would fire continuously. If another panel
+    # reports the same control, that control cannot be used at all.
+    forbidden = {binding_key(b) for b in results.get('CENTRE', {}).values()}
+
     bindings = {}
     for name, _, action in PANELS:
         if action is None:
             continue
         for binding in results.get(name, {}).values():
+            if binding_key(binding) in forbidden:
+                continue
             entries = bindings.setdefault(action, [])
             if binding not in entries:
                 entries.append(binding)
@@ -501,6 +514,17 @@ def section_summary(out, results):
         out('  Usually a bouncing switch or a panel still settling. If it is')
         out('  real, those two panels are wired together and cannot be told')
         out('  apart.')
+
+    # The centre is the one panel whose *presence* is a hazard rather than a
+    # feature, so it gets called out rather than just listed above.
+    centre = results.get('CENTRE')
+    if centre:
+        out()
+        out('  CENTRE IS A SENSOR: ' + ', '.join(label_binding(b)
+                                                 for b in centre.values()))
+        out('  Left unbound on purpose - it fires every time the player returns')
+        out('  to neutral. Nothing else may be bound to that control either, or')
+        out('  the game will trigger it constantly during normal play.')
     out()
 
 
@@ -536,11 +560,10 @@ def main(argv=None):
     windowed = init_display()
     pygame.joystick.init()
 
-    sticks = []
-    for index in range(pygame.joystick.get_count()):
-        stick = pygame.joystick.Joystick(index)
-        stick.init()
-        sticks.append(stick)
+    # Constructing a Joystick opens it; the explicit init() has been deprecated
+    # since pygame-ce 2.4.
+    sticks = [pygame.joystick.Joystick(index)
+              for index in range(pygame.joystick.get_count())]
 
     out = Report()
     section_environment(out)

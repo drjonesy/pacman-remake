@@ -14,8 +14,8 @@ import pygame
 import pytest
 
 from pacman.gamepad import (
-    DEFAULT_DEADZONE, DEFAULT_MAPPING, GamepadManager, binding_key,
-    describe_binding, load_mapping, save_mapping,
+    DEFAULT_DEADZONE, DEFAULT_MAPPING, MAPPING_FILE, GamepadManager,
+    binding_key, describe_binding, load_mapping, save_mapping,
 )
 
 pygame.init()
@@ -248,16 +248,39 @@ def test_default_mapping_matches_the_measured_mat(button, panel, action):
     )
 
 
-def test_default_binds_no_direction_to_an_axis():
-    """This board parks its unused analogue axes at full deflection.
+def test_nothing_is_bound_to_an_axis_by_default():
+    """The mat's CENTRE panel reports on axis 1, and the player stands there.
 
-    A direction bound to one would steer the game with nobody on the mat, so
-    the default must not carry axis bindings even though the descriptor
-    advertises four axes.
+    Measured with `tools/pad_report.py`: stepping on the centre of the mat
+    sends `axis 1 +1.0` and releasing returns it to 0. That is the neutral
+    position between moves, so anything bound to an axis would fire every few
+    seconds during normal play - and `axis 1 +` is exactly what a naive `down`
+    binding would have used.
     """
-    for action in ('up', 'down', 'left', 'right'):
-        kinds = {b['type'] for b in DEFAULT_MAPPING['bindings'][action]}
+    for action, entries in DEFAULT_MAPPING['bindings'].items():
+        kinds = {binding['type'] for binding in entries}
         assert 'axis' not in kinds, f'{action} is bound to an axis'
+
+
+def test_centre_panel_does_nothing():
+    """Standing on the middle of the mat must not reach the game."""
+    for mapping in (DEFAULT_MAPPING, load_mapping(MAPPING_FILE)):
+        pads = GamepadManager(mapping)
+        assert pads.handle(event(pygame.JOYAXISMOTION, axis=1, value=1.0)) == ()
+        assert pads.handle(event(pygame.JOYAXISMOTION, axis=1, value=0.0)) == ()
+
+
+def test_committed_mapping_matches_the_measured_mat():
+    """`data/pad_mapping.json` is the cabinet's real config and is committed.
+
+    It is checked here rather than trusted, because a bad edit to it would be
+    silent - `load_mapping` deliberately falls back instead of raising.
+    """
+    pads = GamepadManager(load_mapping(MAPPING_FILE))
+    for button, (panel, action) in MEASURED_PANELS.items():
+        assert pads.handle(event(pygame.JOYBUTTONDOWN, button=button)) == (
+            action,
+        ), f'{panel} (button {button}) should be {action}'
 
 
 def test_spare_button_indices_do_nothing():

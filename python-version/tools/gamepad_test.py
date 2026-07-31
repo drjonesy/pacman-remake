@@ -84,12 +84,10 @@ def init_pygame():
 
 
 def open_joysticks():
-    sticks = []
-    for index in range(pygame.joystick.get_count()):
-        stick = pygame.joystick.Joystick(index)
-        stick.init()
-        sticks.append(stick)
-    return sticks
+    # Constructing a Joystick opens it; the explicit init() has been deprecated
+    # since pygame-ce 2.4.
+    return [pygame.joystick.Joystick(index)
+            for index in range(pygame.joystick.get_count())]
 
 
 def list_devices(sticks):
@@ -176,7 +174,6 @@ def monitor(sticks, windowed, deadzone):
                 return
             if event.type == pygame.JOYDEVICEADDED:
                 stick = pygame.joystick.Joystick(event.device_index)
-                stick.init()
                 sticks.append(stick)
                 print(f'+ connected: {stick.get_name()}')
                 continue

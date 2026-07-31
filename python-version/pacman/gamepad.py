@@ -247,7 +247,8 @@ class GamepadManager:
             stick = pygame.joystick.Joystick(device_index)
         except pygame.error:
             return None
-        stick.init()
+        # No stick.init(): pygame-ce opens a Joystick on construction and has
+        # deprecated the explicit call since 2.4.
         self.joysticks[stick.get_instance_id()] = stick
         return stick
 
