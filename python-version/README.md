@@ -45,6 +45,7 @@ The only runtime dependency is `pygame-ce`. There is no Node, npm, pnpm, or
 | **Q** | Toggle sound |
 | **F1** | Toggle the FPS counter |
 | **F10** / **Ctrl-Q** | Quit from anywhere |
+| **Ctrl-R** | Open the operator menu from the main menu (see below) |
 
 Turn buffering is preserved: a direction pressed slightly *before* a junction
 still registers when you reach it. It is a large part of how the controls feel.
@@ -56,8 +57,48 @@ Everything it can do is expressed as **direction + select + delete + pause +
 mute**, so a DDR mat, a gamepad and an arcade encoder all use the same code
 path.
 
-Quitting is keyboard-only on purpose — a stray panel press should not be able to
-close the game.
+No single panel press can quit, pause the cabinet permanently, or touch the
+leaderboard — the destructive things live behind the operator menu below.
+
+#### The operator menu (SELECT + START)
+
+A cabinet has no keyboard, so clearing the leaderboard or shutting the game down
+used to mean SSHing into the Pi. Press **SELECT and START together on the main
+menu** and a short list appears:
+
+| Option | Effect |
+|---|---|
+| **RESET SCORES** | Wipes the leaderboard — gated behind a code, below |
+| **EXIT GAME** | Closes the game |
+| **CANCEL** | Backs out |
+
+Navigate with the **up/down arrow panels** and choose with **SELECT**. It is only
+reachable from the main menu, so it can never interrupt a run, and it closes
+itself after 20 seconds of inactivity.
+
+Choosing RESET SCORES asks for a code on the four shape panels, in this order:
+
+> **✕ → ▢ → △ → ○**, then **START** to confirm.
+
+Any wrong panel restarts the code, and SELECT backs out at any point. Nothing is
+written until START is pressed on the confirm screen.
+
+Two details worth knowing if you change this:
+
+* The combo and the code are read as **physical panels**, not as the eight
+  actions the rest of the game uses. On the measured mat the shapes are already
+  aliased to mute/pause/delete/select, so reading actions instead would toggle
+  mute and pause the game while the code was being entered. The panel table is
+  `panels` in `data/pad_mapping.json`, defaulting to the layout below.
+* START is bound to the `select` action, so on the menu it starts a game. To
+  stop that happening before the other half of the combo arrives, a press of
+  SELECT or START on the menu is held for 250ms before it is dispatched. This
+  applies **only on the menu and only to those two panels** — nothing in
+  gameplay is delayed, and the circle panel still starts a game instantly.
+
+Without a pad, **Ctrl-R** opens the same menu; inside it the arrow keys
+navigate, **X / S / T / C** stand in for the four shapes, **Enter** for
+SELECT and START, and **Esc** closes.
 
 #### Calibrating a pad
 

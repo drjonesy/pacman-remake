@@ -108,6 +108,7 @@ def main(argv=None):
     from pacman.ui.hud import Hud
     from pacman.ui.menu import Menu
     from pacman.ui.score_entry import ScoreEntry
+    from pacman.ui.system_menu import ComboWatcher, SystemMenu
 
     assets = AssetStore().load()
     renderer = Renderer(logical, assets)
@@ -121,6 +122,7 @@ def main(argv=None):
     hud = Hud(renderer, font)
     menu = Menu(renderer, font, leaderboard)
     score_entry = ScoreEntry(renderer, font, leaderboard)
+    system_menu = SystemMenu(renderer, font, leaderboard)
 
     def on_score_saved():
         # The HIGH SCORE readout mirrors first place, so both it and the menu
@@ -182,6 +184,17 @@ def main(argv=None):
         if not score_entry.open:
             sound_manager.toggle_mute()
 
+    def open_system_menu():
+        system_menu.open_menu(on_reset=on_score_saved, on_exit=quit_game)
+
+    combo = ComboWatcher(on_trigger=open_system_menu)
+
+    def system_menu_armed():
+        # Menu screen only. Note the state is already STATE_MENU while the
+        # name-entry modal is still up after a game over, so that has to be
+        # excluded separately.
+        return coordinator.state == STATE_MENU and not score_entry.open
+
     # Everything a pad can do, and the only things it can do. Quit is absent on
     # purpose: a stray panel press must not be able to close the game.
     pad_actions = {
@@ -201,14 +214,67 @@ def main(argv=None):
             if handler is not None:
                 handler()
 
+    def handle_pad_event(event):
+        # Always let the manager see the event first: it also does the hotplug
+        # bookkeeping, which has nothing to do with what the modal wants.
+        actions = pads.handle(event)
+        panels = pads.panels(event)
+
+        if system_menu.open:
+            system_menu.feed(panels=panels, actions=actions)
+        elif not (system_menu_armed() and combo.feed(panels, actions)):
+            dispatch(actions)
+
+    # Desktop stand-ins for the mat, so the operator menu can be exercised with
+    # no pad plugged in. Arrows navigate; the shapes sit on their initials.
+    system_menu_keys = {
+        pygame.K_UP: ((), ('up',)),
+        pygame.K_DOWN: ((), ('down',)),
+        pygame.K_x: (('cross',), ()),
+        pygame.K_s: (('square',), ()),
+        pygame.K_t: (('triangle',), ()),
+        pygame.K_c: (('circle',), ()),
+    }
+
+    def handle_system_menu_key(event):
+        # A mat enumerating as a keyboard still gets first refusal here, exactly
+        # as it does outside the modal.
+        panels = pads.key_panels(event)
+        if panels:
+            system_menu.feed(panels=panels, actions=pads.key_actions(event))
+            return
+
+        if event.key == pygame.K_ESCAPE:
+            system_menu.close()
+        elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+            # Enter stands in for whichever panel this stage is waiting on:
+            # SELECT to pick an option, START to commit the reset.
+            system_menu.feed(
+                panels=('start' if system_menu.awaiting_confirm else 'select',),
+            )
+        else:
+            panels, actions = system_menu_keys.get(event.key, ((), ()))
+            if panels or actions:
+                system_menu.feed(panels=panels, actions=actions)
+
     def handle_keydown(event):
+        # Modal, like the name entry: while it is up it consumes every key, so
+        # nothing being typed at it can reach the game behind.
+        if system_menu.open:
+            handle_system_menu_key(event)
+            return
+
         # A mat that enumerates as an HID keyboard gets first refusal, so its
         # panels win over whatever those keys would otherwise mean. Only
         # populated if the mapping file actually contains `key` bindings.
         pad_bound = pads.key_actions(event)
-        if pad_bound:
-            dispatch(pad_bound)
-            return
+        pad_panels = pads.key_panels(event)
+        if pad_bound or pad_panels:
+            if system_menu_armed() and combo.feed(pad_panels, pad_bound):
+                return
+            if pad_bound:
+                dispatch(pad_bound)
+                return
 
         # While the modal is open it consumes everything, mirroring the
         # capture-phase listener in ScoreEntry.jsx:156.
@@ -235,6 +301,10 @@ def main(argv=None):
             quit_game()
         elif event.key == pygame.K_F1:
             coordinator.show_fps = not coordinator.show_fps
+        elif event.key == pygame.K_r and event.mod & pygame.KMOD_CTRL:
+            # Desktop stand-in for SELECT+START on the mat.
+            if system_menu_armed():
+                open_system_menu()
 
     def update(elapsed_ms):
         coordinator.update(elapsed_ms)
@@ -255,6 +325,9 @@ def main(argv=None):
         if score_entry.open:
             score_entry.draw(state['ui_clock_ms'])
 
+        if system_menu.open:
+            system_menu.draw(state['ui_clock_ms'])
+
         if logical is not window:
             pygame.transform.scale(logical, window.get_size(), window)
 
@@ -272,11 +345,21 @@ def main(argv=None):
             elif event.type in GamepadManager.EVENT_TYPES:
                 # Includes the hotplug events, so a pad plugged in after launch
                 # starts working without a restart.
-                dispatch(pads.handle(event))
+                handle_pad_event(event)
 
         frame_ms = clock.tick(C.RENDER_FPS)
         state['ui_clock_ms'] += frame_ms
         coordinator.tick_realtime(frame_ms)
+
+        # Both run on wall-clock time: the game is not simulating while either
+        # the operator menu is up or a combo press is being held.
+        if system_menu.open:
+            system_menu.tick(frame_ms)
+            combo.cancel()
+        elif system_menu_armed():
+            combo.tick(frame_ms, dispatch)
+        else:
+            combo.cancel()
 
         if coordinator.state == STATE_PLAYING and coordinator.running:
             engine.tick(frame_ms)

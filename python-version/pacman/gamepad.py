@@ -13,8 +13,13 @@ what is used until you run it.
 
 Bindings resolve to the same small set of actions the keyboard already drives
 (direction + select + delete + pause + mute), so nothing downstream has to know
-a pad exists. Quit is deliberately *not* in that set - a stray panel press must
-not be able to close the game (README "Gamepad / arcade encoder").
+a pad exists. Quit is deliberately *not* in that set - no single panel press may
+close the game (README "Dance pad / gamepad / arcade encoder"). A pad can still
+reach EXIT GAME, but only through the operator menu in `ui/system_menu.py`,
+which takes a two-panel combo to open and a menu selection to act on.
+
+That menu also needs to know which *panel* was pressed rather than what it
+does, so alongside `bindings` there is a `panels` table. See `PANELS`.
 """
 
 import json
@@ -25,6 +30,14 @@ import pygame
 ACTIONS = (
     'up', 'down', 'left', 'right', 'select', 'delete', 'pause', 'mute',
 )
+
+# Physical panels, kept in a namespace of their own because a combo has to know
+# *which control* was pressed, not what it does. The two are not
+# interchangeable: on this mat the panel labelled SELECT drives the `pause`
+# action, and the `select` action is driven by START and the circle panel. So
+# `PANELS`'s 'select' and `ACTIONS`'s 'select' are different things - the score
+# menu combo (`ui/system_menu.py`) needs the panel, the game wants the action.
+PANELS = ('select', 'start', 'cross', 'square', 'triangle', 'circle')
 
 MAPPING_FILE = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -91,6 +104,20 @@ DEFAULT_MAPPING = {
         'mute': [
             {'type': 'button', 'button': 4},   # square panel
         ],
+    },
+    # Physical panels, straight off the layout comment above. Only buttons and
+    # keys are honoured here - a combo entered on an analogue axis would be at
+    # the mercy of the same spurious deflection that keeps axes out of
+    # `bindings`. A pad that numbers its panels differently can override this
+    # with a `panels` block in `data/pad_mapping.json`; the calibration tool
+    # does not write one, so these defaults stand unless edited by hand.
+    'panels': {
+        'select': [{'type': 'button', 'button': 8}],
+        'start': [{'type': 'button', 'button': 9}],
+        'square': [{'type': 'button', 'button': 4}],
+        'triangle': [{'type': 'button', 'button': 5}],
+        'cross': [{'type': 'button', 'button': 6}],
+        'circle': [{'type': 'button', 'button': 7}],
     },
 }
 
@@ -205,7 +232,9 @@ class GamepadManager:
         self.joysticks = {}          # instance_id -> Joystick
         self._axis_state = {}        # (instance_id, axis) -> -1 | 0 | 1
         self._lookup = {}            # binding key -> tuple of actions
+        self._panel_lookup = {}      # binding key -> tuple of panel names
         self._build_lookup()
+        self._build_panel_lookup()
 
     def _read_deadzone(self):
         try:
@@ -226,6 +255,28 @@ class GamepadManager:
                 # is hand-editable and nothing here should silently drop half
                 # of what it says.
                 self._lookup[key] = self._lookup.get(key, ()) + (action,)
+
+    def _build_panel_lookup(self):
+        """The same table again, keyed by physical panel instead of action.
+
+        Falls back to the defaults when the mapping file has no `panels` block,
+        which is the normal case: `tools/gamepad_test.py --calibrate` only
+        writes `bindings`.
+        """
+        panels = self.mapping.get('panels') or DEFAULT_MAPPING['panels']
+        if not isinstance(panels, dict):
+            panels = DEFAULT_MAPPING['panels']
+
+        for panel in PANELS:
+            for binding in panels.get(panel) or ():
+                key = binding_key(binding)
+                # Axes and hats are refused rather than silently accepted: see
+                # the note on DEFAULT_MAPPING['panels'].
+                if key is None or key[0] not in ('button', 'key'):
+                    continue
+                self._panel_lookup[key] = (
+                    self._panel_lookup.get(key, ()) + (panel,)
+                )
 
     # -- devices -------------------------------------------------------------
 
@@ -327,6 +378,22 @@ class GamepadManager:
             return self._lookup.get(('axis', event.axis, sign), ())
 
         return ()
+
+    def panels(self, event):
+        """Which physical panels `event` is, ignoring what they are bound to.
+
+        Buttons only - `handle` owns the axis edge-detection state, and calling
+        both for one event would consume that edge twice.
+        """
+        if event.type != pygame.JOYBUTTONDOWN:
+            return ()
+        if not self._accepts(getattr(event, 'instance_id', None)):
+            return ()
+        return self._panel_lookup.get(('button', event.button), ())
+
+    def key_panels(self, event):
+        """`panels`, for a mat that enumerates as an HID keyboard."""
+        return self._panel_lookup.get(('key', pygame.key.name(event.key)), ())
 
     def key_actions(self, event):
         """Actions bound to a keyboard key, for mats that enumerate as an HID
