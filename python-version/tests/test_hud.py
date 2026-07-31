@@ -1,14 +1,19 @@
 """The in-game control reminder.
 
 The pause and sound controls used to be named only on the title screen, so a
-player had to have memorised them by the time they were playing. They are now in
-the last quarter of the score row, which is the only part of the chrome with
-room: the bottom row can be occupied end to end by a full complement of lives
-and seven fruit.
+player had to have memorised them by the time they were playing. They are now
+drawn in the one-tile gap between the score row and the maze, written as
+`PAUSE = [SELECT]   🔈 = [□]`.
 
-That corner is tight, so the widths are pinned here as well as the wording - the
-dance-mat labels are nearly twice as long as the keyboard ones, and nothing in a
-rendered frame would fail loudly if they started overlapping HIGH SCORE.
+Two things here are easy to break silently and are pinned as a result:
+
+* **The band it sits in.** That gap is 8px tall and the glyphs are 7px, so
+  there is one pixel of slack. Text that drifts up hits the score, down hits
+  the maze, and neither fails loudly in a rendered frame.
+* **The mute slash.** The speaker is both the label and the on/off indicator,
+  so if the strike stops landing on it the game loses its only visible report
+  of mute - the separate MUTE readout was removed as redundant once this
+  existed.
 """
 
 import pygame
@@ -16,16 +21,21 @@ import pytest
 
 from pacman import constants as C
 from pacman.controls import KEYBOARD, PAD, SCHEMES, Controls
-from pacman.font import BitmapFont
-from pacman.ui.hud import (
-    HIGH_SCORE_CENTER, HIGH_SCORE_RIGHT, HINT_RIGHT, Hud,
+from pacman.font import GLYPHS, BitmapFont
+from pacman.ui.hints import (
+    SLASH_COLOR, SPEAKER, control_hints, sound_hint,
 )
+from pacman.ui.hud import HINT_Y, LINE_TWO_Y, Hud
 
 pygame.init()
 
 
 class RecordingFont:
-    """Captures what would be drawn, so wording is testable without a display."""
+    """Captures what would be drawn, so wording is testable without a display.
+
+    Draws nothing, which also means anything found on the surface afterwards
+    must have come from the slash.
+    """
 
     def __init__(self):
         self.texts = []
@@ -50,54 +60,74 @@ class StubRenderer:
 
 
 class StubSound:
-    master_volume = 1
+    def __init__(self, master_volume=1):
+        self.master_volume = master_volume
 
 
 class StubCoordinator:
     """Only the attributes `Hud.draw` actually reads."""
 
-    def __init__(self, show_fps=False):
+    def __init__(self, show_fps=False, muted=False):
         self.points = 1234
         self.high_score = 5678
         self.lives = 3
         self.fruit_display = []
         self.pellet_blink_ms = 0
         self.show_fps = show_fps
-        self.sound_manager = StubSound()
+        self.sound_manager = StubSound(0 if muted else 1)
 
 
 @pytest.fixture
 def hud_for():
-    def build(name=KEYBOARD):
-        font = RecordingFont()
+    def build(name=KEYBOARD, font=None):
+        font = font or RecordingFont()
         controls = Controls(name=name, path=None)
         return Hud(StubRenderer(), font, controls), font
     return build
 
 
+def slash_pixels(surface):
+    """How much of the strike colour is on the screen, in the hint band."""
+    return sum(
+        surface.get_at((x, y))[:3] == SLASH_COLOR
+        for x in range(surface.get_width())
+        for y in range(HINT_Y - 2, HINT_Y + 10)
+    )
+
+
+# -- wording -----------------------------------------------------------------
+
 def test_pause_and_sound_are_named_during_play(hud_for):
     hud, font = hud_for(KEYBOARD)
     hud.draw(StubCoordinator(), 60.0)
 
-    assert 'ESC PAUSE' in font.texts
-    assert 'Q SOUND' in font.texts
+    assert f'PAUSE = [ESC]   {SPEAKER} = [Q]' in font.texts
 
 
 def test_the_hint_follows_the_pad_scheme(hud_for):
     hud, font = hud_for(PAD)
     hud.draw(StubCoordinator(), 60.0)
 
-    assert 'SELECT PAUSE' in font.texts
-    assert 'SQUARE SOUND' in font.texts
-    assert 'ESC PAUSE' not in font.texts
+    assert f'PAUSE = [SELECT]   {SPEAKER} = [□]' in font.texts
+    assert not any('ESC' in text for text in font.texts)
+    # The panel is drawn, never spelled.
+    assert not any('SQUARE' in text for text in font.texts)
 
 
-def test_the_fps_counter_wins_the_corner(hud_for):
-    """Both occupy the same place; the debug toggle is the deliberate override."""
+def test_the_speaker_replaces_the_word_sound(hud_for):
     hud, font = hud_for(KEYBOARD)
+    hud.draw(StubCoordinator(), 60.0)
+
+    assert not any('SOUND' in text for text in font.texts)
+    assert any(SPEAKER in text for text in font.texts)
+
+
+def test_the_fps_counter_no_longer_displaces_the_hint(hud_for):
+    """It used to share the score row's corner; the gap band is clear of it."""
+    hud, font = hud_for(KEYBOARD, font=RecordingFont())
     hud.draw(StubCoordinator(show_fps=True), 60.0)
 
-    assert not any('PAUSE' in text for text in font.texts)
+    assert any('PAUSE = ' in text for text in font.texts)
 
 
 def test_the_score_row_still_draws(hud_for):
@@ -106,15 +136,14 @@ def test_the_score_row_still_draws(hud_for):
     hud.draw(StubCoordinator(), 60.0)
 
     assert 'HIGH SCORE' in font.texts
-    assert '1234' in font.texts          # points
-    assert '5678' in font.texts          # high score
+    assert '1234' in font.texts
+    assert '5678' in font.texts
 
 
 def test_the_one_up_blink_is_unaffected(hud_for):
     """1UP is dark for the first half of its cycle - easy to mistake for a
     regression when reading a single frame."""
     hud, font = hud_for(KEYBOARD)
-
     dark = StubCoordinator()
     dark.pellet_blink_ms = 0
     hud.draw(dark, 60.0)
@@ -127,57 +156,94 @@ def test_the_one_up_blink_is_unaffected(hud_for):
     assert '1UP' in font.texts
 
 
-def test_the_pause_overlay_names_the_resume_control(hud_for):
+def test_the_pause_overlay_says_resume(hud_for):
     hud, font = hud_for(PAD)
     hud.draw_pause_overlay()
 
     assert 'PAUSED' in font.texts
-    assert any('SELECT RESUMES' in text for text in font.texts)
+    assert any('RESUME = [SELECT]' in text for text in font.texts)
 
 
-def test_mute_readout_survives_the_hint(hud_for):
-    hud, font = hud_for(KEYBOARD)
-    coordinator = StubCoordinator()
-    coordinator.sound_manager.master_volume = 0
-    hud.draw(coordinator, 60.0)
+# -- mute --------------------------------------------------------------------
 
-    assert 'MUTE' in font.texts
+def test_muting_strikes_the_speaker(hud_for):
+    hud, _ = hud_for(KEYBOARD)
+    hud.draw(StubCoordinator(muted=True), 60.0)
+
+    assert slash_pixels(hud.renderer.surface) > 0
+
+
+def test_unmuted_draws_no_slash(hud_for):
+    hud, _ = hud_for(KEYBOARD)
+    hud.draw(StubCoordinator(muted=False), 60.0)
+
+    assert slash_pixels(hud.renderer.surface) == 0
+
+
+@pytest.mark.parametrize('name', [KEYBOARD, PAD])
+def test_the_slash_lands_on_the_speaker_not_a_neighbour(name):
+    """The speaker is no longer the last character, so its index is looked up.
+
+    Drawn with the real font: the slash must overlap the speaker's own cell and
+    not stray into the bracket beside it.
+    """
+    font = BitmapFont()
+    text = control_hints(SCHEMES[name])
+    index = text.index(SPEAKER)
+
+    surface = pygame.Surface((C.LOGICAL_WIDTH, 20))
+    from pacman.ui.hints import draw_hint
+    draw_hint(surface, font, text, C.LOGICAL_WIDTH / 2, 5, C.WHITE,
+              align='center', muted=True)
+
+    width = font.measure(text)[0]
+    left = C.LOGICAL_WIDTH / 2 - width / 2
+    cell_left = left + index * 6
+
+    struck = [x for x in range(surface.get_width())
+              for y in range(surface.get_height())
+              if surface.get_at((x, y))[:3] == SLASH_COLOR]
+    assert struck, 'nothing was struck'
+    # Allow the one-pixel overshoot the stroke deliberately has at each end.
+    assert min(struck) >= cell_left - 2
+    assert max(struck) <= cell_left + 5 + 2
 
 
 # -- layout ------------------------------------------------------------------
 
-# Right-hand extent of the score row's own text, which the hint sits beyond.
-HIGH_SCORE_LABEL_RIGHT = HIGH_SCORE_CENTER + (len('HIGH SCORE') * 6 - 1) / 2
+@pytest.mark.parametrize('name', [KEYBOARD, PAD])
+def test_the_hint_fits_the_screen(name):
+    font = BitmapFont()
+    assert font.measure(control_hints(SCHEMES[name]))[0] <= C.LOGICAL_WIDTH
 
 
 @pytest.mark.parametrize('name', [KEYBOARD, PAD])
-def test_the_hint_clears_the_score_row(name):
-    """Nothing in a rendered frame fails loudly when text overlaps."""
+def test_the_hint_sits_between_the_score_row_and_the_maze(name):
+    """One pixel of slack in an 8px band - worth pinning both edges."""
     font = BitmapFont()
-    scheme = SCHEMES[name]
+    height = font.measure(control_hints(SCHEMES[name]))[1]
 
-    pause_left = HINT_RIGHT - font.measure(f'{scheme.pause} PAUSE')[0]
-    sound_left = HINT_RIGHT - font.measure(f'{scheme.sound} SOUND')[0]
-
-    assert pause_left > HIGH_SCORE_LABEL_RIGHT, 'collides with HIGH SCORE'
-    # Line two carries the score itself, right-aligned at HIGH_SCORE_RIGHT.
-    assert sound_left > HIGH_SCORE_RIGHT, 'collides with the high score value'
-
-
-@pytest.mark.parametrize('name', [KEYBOARD, PAD])
-def test_the_hint_stays_on_screen(name):
-    font = BitmapFont()
-    scheme = SCHEMES[name]
-
-    for text in (f'{scheme.pause} PAUSE', f'{scheme.sound} SOUND'):
-        assert HINT_RIGHT - font.measure(text)[0] >= 0
-        assert HINT_RIGHT <= C.LOGICAL_WIDTH
+    assert HINT_Y >= LINE_TWO_Y + 7, 'overlaps the score row'
+    assert HINT_Y + height <= C.MAZE_ORIGIN_Y, 'overlaps the maze'
 
 
 @pytest.mark.parametrize('name', [KEYBOARD, PAD])
 def test_the_pause_overlay_line_fits(name):
     font = BitmapFont()
-    scheme = SCHEMES[name]
-    text = f'{scheme.pause} RESUMES   {scheme.sound} SOUND'
-
+    text = control_hints(SCHEMES[name], verb='RESUME')
     assert font.measure(text)[0] <= C.LOGICAL_WIDTH
+
+
+def test_the_icon_glyphs_exist():
+    """These were deleted once already, when the passcode stopped using them.
+
+    A missing glyph renders as the fallback box rather than failing, so nothing
+    else here would catch it.
+    """
+    assert SPEAKER in GLYPHS
+    for scheme in SCHEMES.values():
+        for text in (control_hints(scheme),
+                     control_hints(scheme, verb='RESUME'),
+                     sound_hint(scheme)):
+            for char in text:
+                assert char == ' ' or char in GLYPHS, f'{char!r} has no glyph'

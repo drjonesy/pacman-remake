@@ -7,6 +7,7 @@ title, cyan rank labels, white names and amber scores.
 
 from .. import constants as C
 from ..controls import KEYBOARD, SCHEMES
+from .hints import control_hints, draw_hint
 
 RANK_LABELS = ('1ST', '2ND', '3RD')     # Leaderboard.jsx:4
 
@@ -35,10 +36,14 @@ HINT_Y = C.LOGICAL_HEIGHT - 20
 
 
 class Menu:
-    def __init__(self, renderer, font, leaderboard, controls=None):
+    def __init__(self, renderer, font, leaderboard, controls=None,
+                 sound_manager=None):
         self.renderer = renderer
         self.font = font
         self.leaderboard = leaderboard
+        # Only read for the speaker icon's mute state; the title screen plays
+        # nothing itself.
+        self.sound_manager = sound_manager
         # Held by reference, not copied: the operator menu can switch scheme
         # while this object lives, and the next frame must say the new thing.
         self.controls = controls
@@ -66,9 +71,12 @@ class Menu:
         self.draw_panel(surface)
         # Dark on the amber backdrop - grey would disappear into it.
         scheme = self.scheme
-        self.font.draw(
-            surface, f'{scheme.pause} PAUSE   {scheme.sound} SOUND',
+        muted = (self.sound_manager is not None
+                 and self.sound_manager.master_volume == 0)
+        draw_hint(
+            surface, self.font, control_hints(scheme),
             C.LOGICAL_WIDTH / 2, HINT_Y, C.ARCADE_DARK, align='center',
+            muted=muted,
         )
 
     def draw_start_button(self, surface):

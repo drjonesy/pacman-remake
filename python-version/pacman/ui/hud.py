@@ -10,6 +10,7 @@ import pygame
 
 from .. import constants as C
 from ..controls import KEYBOARD, SCHEMES
+from .hints import control_hints, draw_hint
 
 TILE = C.SCALED_TILE_SIZE
 
@@ -32,12 +33,17 @@ BOTTOM_ROW_Y = C.MAZE_ORIGIN_Y + C.MAZE_HEIGHT   # 280
 ICON_SIZE = TILE * 2                             # 16, engine.js:1878
 MAX_FRUIT_ICONS = 7                              # engine.js:1888
 
-# The pause/sound reminder sits in the last quarter of the score row, which the
-# reference left empty (the 25% and 50% columns above only reach x=168). The
-# bottom row was the other candidate and does not work: with a full complement
-# of lives on the left and seven fruit on the right, the gap between them
-# narrows to about 48px - too little for the longer dance-mat labels.
-HINT_RIGHT = C.LOGICAL_WIDTH - 2
+# The control reminder sits in the one-tile gap between the score row and the
+# maze (y=24..31), which is the only *full-width* empty band on the screen and
+# the only place `PAUSE = [SELECT]` fits at all: the score row's spare corner
+# has 80px, and that line alone is 95px. The bottom row is no good either -
+# with a full complement of lives on the left and seven fruit on the right, the
+# gap between them narrows to about 48px.
+#
+# Being clear of the top-right corner also means the FPS counter no longer
+# contends with it, so the hint is drawn unconditionally.
+HINT_Y = C.MAZE_ORIGIN_Y - TILE                  # 24
+HINT_CENTER = C.LOGICAL_WIDTH / 2
 
 
 class Hud:
@@ -58,11 +64,9 @@ class Hud:
         self.draw_control_hint(coordinator)
 
         # The reference showed a volume_up / volume_off icon in its header
-        # (engine.js:1342). There is no header here, so muting gets a small
-        # readout instead - without it the sound toggle has no visible effect.
-        if coordinator.sound_manager.master_volume == 0:
-            self.font.draw(self.renderer.surface, 'MUTE', 1, LINE_TWO_Y,
-                           C.ARCADE_GREY)
+        # (engine.js:1342). The struck-through speaker in the hint below is
+        # that icon, so the separate MUTE readout this used to carry would now
+        # be saying the same thing twice.
 
         if coordinator.show_fps:
             self.draw_fps(fps)
@@ -106,20 +110,14 @@ class Hud:
     def draw_control_hint(self, coordinator):
         """Names the pause and sound controls, so neither has to be memorised.
 
-        Kept grey rather than white so it reads as chrome and does not compete
-        with the score. Suppressed while the FPS counter is on: that is a
-        developer toggle and it occupies the same corner.
+        Grey rather than white so it reads as chrome and does not compete with
+        the score above or the maze below.
         """
-        if coordinator.show_fps:
-            return
-
-        surface = self.renderer.surface
-        scheme = self.scheme
-
-        self.font.draw(surface, f'{scheme.pause} PAUSE', HINT_RIGHT,
-                       LINE_ONE_Y, C.ARCADE_GREY, align='right')
-        self.font.draw(surface, f'{scheme.sound} SOUND', HINT_RIGHT,
-                       LINE_TWO_Y, C.ARCADE_GREY, align='right')
+        draw_hint(
+            self.renderer.surface, self.font, control_hints(self.scheme),
+            HINT_CENTER, HINT_Y, C.ARCADE_GREY, align='center',
+            muted=coordinator.sound_manager.master_volume == 0,
+        )
 
     def draw_fps(self, fps):
         """The debug FPS counter (engine.js:2550) - kept, per §11, as a toggle."""
@@ -128,7 +126,7 @@ class Hud:
             C.LOGICAL_WIDTH - 2, 1, C.ARCADE_CYAN, align='right',
         )
 
-    def draw_pause_overlay(self):
+    def draw_pause_overlay(self, muted=False):
         """Blurs the board and prints PAUSED (engine.js:2015).
 
         The web build applied `filter: blur(5px)`. Downscaling and scaling back
@@ -149,8 +147,8 @@ class Hud:
 
         # The score row's hint is blurred out along with the board, and a
         # stopped player is the one most likely to be looking for the control.
-        scheme = self.scheme
-        self.font.draw(
-            surface, f'{scheme.pause} RESUMES   {scheme.sound} SOUND',
+        draw_hint(
+            surface, self.font, control_hints(self.scheme, verb='RESUME'),
             width / 2, height / 2 + 14, C.ARCADE_GREY, align='center',
+            muted=muted,
         )

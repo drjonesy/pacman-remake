@@ -2,11 +2,19 @@
 """Find an SDL audio driver that reaches the TV. Run this on the Pi.
 
 Companion to `gamepad_test.py`: the same problem, for the other half of the
-cabinet's hardware. "No sound from the game, but everything else plays fine" is
-almost always routing, not the game - SDL picks its own audio driver, and the
-one it picks may not be the one the desktop uses. On a Pi whose system audio
-goes out over HDMI through PipeWire, SDL can still choose raw ALSA, and raw ALSA
-is the headphone jack. Nothing errors; the sound just goes somewhere else.
+cabinet's hardware.
+
+**Confirm the Pi plays sound at all before running this** - `speaker-test -t wav
+-c 2 -l 1`, or any video. If nothing plays either, the game is not involved and
+the Pi is pointed at the wrong output (the AV jack rather than HDMI is the usual
+culprit, and has been the real cause every time so far). This tool cannot detect
+that: a disconnected jack accepts audio perfectly happily.
+
+Past that, "no sound from the game but everything else plays fine" is usually
+routing rather than the game - SDL picks its own audio driver, and the one it
+picks may not be the one the desktop uses. On a Pi whose system audio goes out
+over HDMI through PipeWire, SDL can still choose raw ALSA, and raw ALSA is the
+headphone jack. Nothing errors; the sound just goes somewhere else.
 
 So this walks every driver SDL was built with, reports which ones open, lists
 the devices each can see, and plays a real clip from the game's own assets
@@ -16,6 +24,7 @@ Usage::
 
     python tools/audio_check.py              # try every driver
     python tools/audio_check.py --driver alsa
+    python tools/audio_check.py --buffer 2048   # rule out an underrun first
     python tools/audio_check.py --quiet      # report only, play nothing
 
 Then launch the game with whichever worked::
@@ -53,6 +62,10 @@ def parse_args(argv=None):
                         help='test only this driver')
     parser.add_argument('--quiet', action='store_true',
                         help='report drivers and devices, play nothing')
+    parser.add_argument('--buffer', type=int, default=512, metavar='N',
+                        help='mixer buffer size (default: 512, matching the '
+                             'game). A Pi that underruns needs 1024 or 2048 - '
+                             'try those before concluding it is routing.')
     parser.add_argument('--clip', default=None, metavar='NAME',
                         help='manifest clip to play (default: the game start '
                              'jingle, which is the longest)')
@@ -82,7 +95,7 @@ def pick_clip(manifest, preferred):
     return None, None
 
 
-def try_driver(driver, clip_path, quiet):
+def try_driver(driver, clip_path, quiet, buffer_size=512):
     """Returns True if the mixer opened. Prints what happened either way."""
     label = driver or '(SDL default)'
     print(f'\n--- {label} ---')
@@ -102,7 +115,8 @@ def try_driver(driver, clip_path, quiet):
         pass
 
     try:
-        pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
+        pygame.mixer.init(frequency=44100, size=-16, channels=2,
+                          buffer=buffer_size)
     except pygame.error as error:
         print(f'  unavailable: {error}')
         return False
@@ -156,7 +170,9 @@ def main(argv=None):
     print(f'clip: {name or "(none available)"}')
 
     drivers = (args.driver,) if args.driver else CANDIDATES
-    working = [d for d in drivers if try_driver(d, clip_path, args.quiet)]
+    print(f'buffer: {args.buffer}')
+    working = [d for d in drivers
+               if try_driver(d, clip_path, args.quiet, args.buffer)]
 
     print('\n=== summary ===')
     if not working:
@@ -175,9 +191,12 @@ def main(argv=None):
         print('\nOnly SDL\'s own choice works here, so there is nothing to')
         print('override - the game already uses it. If that was silent, the')
         print('problem is downstream of SDL, not in the game.')
-    print('\nIf you heard none of them, the game is not the problem - the sound')
-    print('is reaching a device that is not the TV. Check the desktop volume')
-    print('mixer output device, and `wpctl status` on Bookworm.')
+    print('\nIf you heard none of them, re-run with a bigger buffer before')
+    print('blaming routing - an undersized buffer can starve the stream into')
+    print('silence on a Pi:')
+    print('    python tools/audio_check.py --buffer 2048')
+    print('\nStill nothing? Then the sound is reaching a device that is not the')
+    print('TV. Check the desktop mixer output, and `wpctl status` on Bookworm.')
     return 0
 
 

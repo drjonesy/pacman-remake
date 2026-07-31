@@ -50,10 +50,18 @@ The only runtime dependency is `pygame-ce`. There is no Node, npm, pnpm, or
 Turn buffering is preserved: a direction pressed slightly *before* a junction
 still registers when you reach it. It is a large part of how the controls feel.
 
-The pause and sound controls are named on screen **during play** — in the last
-quarter of the score row, and again on the pause overlay — so nothing has to be
-memorised from the title screen. The FPS counter (**F1**) shares that corner and
-takes it when enabled. Which controls are named depends on the selected
+The pause and sound controls are named on screen **during play** — in the gap
+between the score row and the maze, and again on the pause overlay — so nothing
+has to be memorised from the title screen:
+
+```
+PAUSE = [SELECT]   🔈 = [□]
+```
+
+The control is bracketed, and drawn rather than named wherever the mat has a
+shape printed on it. The speaker has no accompanying word: it is both the label
+and the state, **struck through in red when sound is off**, which is the game's
+only visible report of mute. Which controls are named depends on the selected
 controller scheme; see the operator menu below.
 
 ### Dance pad / gamepad / arcade encoder
@@ -85,16 +93,16 @@ itself after 20 seconds of inactivity.
 
 ##### CONTROLLER — labelling for the mat
 
-The hints were written for a keyboard — PRESS ENTER, ESC PAUSE, Q SOUND — none of
+The hints were written for a keyboard — PRESS ENTER, PAUSE = [ESC] — none of
 which means anything to someone standing on a dance mat. Choose **DDR PAD** and
 they become the panel names instead:
 
 | Screen | Keyboard | DDR pad |
 |---|---|---|
 | Main menu button | PRESS ENTER | PRESS START |
-| Main menu hint | ESC PAUSE   Q SOUND | SELECT PAUSE   SQUARE SOUND |
-| **In game** (score row) | ESC PAUSE / Q SOUND | SELECT PAUSE / SQUARE SOUND |
-| **Pause overlay** | ESC RESUMES   Q SOUND | SELECT RESUMES   SQUARE SOUND |
+| Main menu hint | PAUSE = [ESC]   🔈 = [Q] | PAUSE = [SELECT]   🔈 = [□] |
+| **In game** (below the score) | PAUSE = [ESC]   🔈 = [Q] | PAUSE = [SELECT]   🔈 = [□] |
+| **Pause overlay** | RESUME = [ESC]   🔈 = [Q] | RESUME = [SELECT]   🔈 = [□] |
 | Name entry | ARROWS MOVE  ENTER PICK | ARROWS MOVE  START PICK |
 | This menu | ENTER PICKS / ESC CANCELS | SELECT PICKS / SELECT CANCELS |
 
@@ -346,12 +354,33 @@ Read it in that order — each line rules something out:
 | `audio: OFF (...)` | The mixer never opened. The reason is in the brackets. |
 | `0 clips loaded` | The mixer opened but no audio decoded — check `assets/audio/`. |
 | `volume=0` | **The game is muted.** Q, or the square panel, toggles it. |
-| Looks correct, still silent | Routing. SDL is playing to a device that is not the TV. |
+| Looks correct, still silent | Routing — the sound is going somewhere that is not the TV. |
 
-That last case is the common one on a Pi. SDL picks its own audio driver, and it
-need not be the one the desktop uses: with system audio going out over HDMI
-through PipeWire, SDL can still choose raw ALSA — and raw ALSA is the headphone
-jack. Nothing errors; the sound just arrives at the wrong socket.
+### Before any of the above: does the Pi play *anything*?
+
+```bash
+speaker-test -t wav -c 2 -l 1        # Ctrl-C to stop
+```
+
+Or just play a YouTube video. **If nothing plays either, the game is not
+involved** — the Pi is pointed at the wrong output. That has been the answer
+every time so far: the Pi was set to the **AV / 3.5mm jack** rather than
+**HDMI**, so all audio was arriving at a socket with nothing plugged into it.
+Right-click the speaker icon on the taskbar (or `raspi-config` → System Options
+→ Audio, or `wpctl status`) and select the HDMI sink.
+
+This check costs ten seconds and is worth doing *first*, because the game's own
+diagnostics cannot see it: from SDL's side a disconnected jack and a TV are
+indistinguishable, so the log reports a perfectly healthy audio stack while the
+room stays quiet. That is exactly why the table above bottoms out at "routing"
+rather than naming a cause — and why "everything else works fine" is worth
+confirming rather than assuming, since it is the assumption that decides whether
+to debug the game at all.
+
+Only once the Pi itself is audible is it worth suspecting SDL. SDL picks its own
+audio driver, and it need not be the one the desktop uses: with system audio
+going out over HDMI through PipeWire, SDL can still choose raw ALSA — and raw
+ALSA is the headphone jack again. Nothing errors either way.
 
 To find a driver that reaches the TV:
 

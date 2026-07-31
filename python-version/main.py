@@ -165,7 +165,7 @@ def main(argv=None):
     controls = Controls()
 
     hud = Hud(renderer, font, controls)
-    menu = Menu(renderer, font, leaderboard, controls)
+    menu = Menu(renderer, font, leaderboard, controls, sound_manager)
     score_entry = ScoreEntry(renderer, font, leaderboard, controls)
     system_menu = SystemMenu(renderer, font, leaderboard, controls=controls)
 
@@ -364,7 +364,9 @@ def main(argv=None):
             coordinator.render(interp)
             hud.draw(coordinator, engine.fps)
             if coordinator.paused_display:
-                hud.draw_pause_overlay()
+                hud.draw_pause_overlay(
+                    muted=sound_manager.master_volume == 0,
+                )
         else:
             menu.draw(state['ui_clock_ms'])
             if coordinator.show_fps:

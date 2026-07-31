@@ -68,10 +68,29 @@ GLYPHS = {
     '<': ('00001', '00010', '00100', '01000', '00100', '00010', '00001'),
     '(': ('00010', '00100', '01000', '01000', '01000', '00100', '00010'),
     ')': ('01000', '00100', '00010', '00010', '00010', '00100', '01000'),
+    # Square brackets enclose the control in every hint (`ui/hints.py`). Their
+    # absence was not harmless: an unmapped character falls back to a hollow
+    # box, which is indistinguishable from the square-panel icon drawn a few
+    # cells away.
+    '[': ('01110', '01000', '01000', '01000', '01000', '01000', '01110'),
+    ']': ('01110', '00010', '00010', '00010', '00010', '00010', '01110'),
     '+': ('00000', '00100', '00100', '11111', '00100', '00100', '00000'),
     '*': ('00000', '00000', '01110', '01110', '01110', '00000', '00000'),
     "'": ('00100', '00100', '00000', '00000', '00000', '00000', '00000'),
     '?': ('01110', '10001', '00001', '00010', '00100', '00000', '00100'),
+    # Icons for the in-game control hint (`ui/hud.py`). Kept here rather than
+    # drawn as primitives so they colour, align, measure and cache exactly like
+    # the text they sit beside - a hint that is half text and half sprite would
+    # need two layout paths.
+    #
+    # The square is the mat's square panel; the speaker is the sound toggle. The
+    # muted state is the same speaker with a diagonal struck through it, drawn
+    # over the top rather than kept as a second glyph, because a slash legible
+    # at 5x7 needs the whole cell and would leave nothing recognisable beneath.
+    '□': ('00000', '11111', '10001', '10001', '10001', '11111', '00000'),
+    # Cone on the left, three wave dots on the right. Without the waves the
+    # cone alone reads as a plain arrow at this size, not a speaker.
+    '🔈': ('00100', '01101', '11100', '11101', '11100', '01101', '00100'),
 }
 
 # Anything unmapped renders as a hollow box rather than vanishing, so a missing

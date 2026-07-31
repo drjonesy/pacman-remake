@@ -27,13 +27,17 @@ SETTINGS_KEY = 'controller'
 class ControlScheme:
     """The labels one input style uses. Two instances, both below."""
 
-    def __init__(self, key, label, start, pause, sound, move, pick,
+    def __init__(self, key, label, start, pause, sound, sound_icon, move, pick,
                  menu_pick, cancel, confirm):
         self.key = key              # persisted value
         self.label = label          # how the operator menu lists it
         self.start = start          # main menu: PRESS <start>
         self.pause = pause          # main menu hint: <pause> PAUSE
         self.sound = sound          # main menu hint: <sound> SOUND
+        # The same control as `sound`, drawn rather than spelled, for the
+        # in-game hint where there is no room for a word. A key keeps its
+        # letter; a mat panel becomes the shape printed on it.
+        self.sound_icon = sound_icon
         self.move = move            # name entry: <move> MOVE
         self.pick = pick            # name entry: <pick> PICK
         self.menu_pick = menu_pick  # operator menu: <menu_pick> PICKS
@@ -44,7 +48,7 @@ class ControlScheme:
 SCHEMES = {
     KEYBOARD: ControlScheme(
         key=KEYBOARD, label='KEYBOARD',
-        start='ENTER', pause='ESC', sound='Q',
+        start='ENTER', pause='ESC', sound='Q', sound_icon='Q',
         move='ARROWS', pick='ENTER',
         menu_pick='ENTER', cancel='ESC', confirm='ENTER',
     ),
@@ -52,7 +56,7 @@ SCHEMES = {
         key=PAD, label='DDR PAD',
         # START and the circle panel both drive `select`; START is the one
         # printed on the mat, so that is what the hint says.
-        start='START', pause='SELECT', sound='SQUARE',
+        start='START', pause='SELECT', sound='SQUARE', sound_icon='□',
         move='ARROWS', pick='START',
         menu_pick='SELECT', cancel='SELECT', confirm='START',
     ),
