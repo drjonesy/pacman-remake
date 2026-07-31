@@ -12,6 +12,7 @@ Two details are deliberate:
   run of dots queues rather than stacking (engine.js:3256).
 """
 
+import json
 import os
 
 import pygame
@@ -56,8 +57,16 @@ class SoundManager:
         manifest_path = os.path.join(self.asset_root, 'manifest.json')
         try:
             with open(manifest_path, encoding='utf-8') as handle:
-                clips = json.load(handle).get('audio', {})
+                parsed = json.load(handle)
         except (OSError, ValueError):
+            parsed = None
+
+        # Valid JSON is not necessarily the *shape* expected: a manifest that
+        # parsed as a list would sail past the except above and then fail on
+        # .get. Same rule as everywhere else - a corrupt file is silence, not a
+        # crash, because the cabinet has to boot.
+        clips = parsed.get('audio') if isinstance(parsed, dict) else None
+        if not isinstance(clips, dict):
             clips = {}
 
         for name, rel_path in clips.items():
