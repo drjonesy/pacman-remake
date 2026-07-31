@@ -85,6 +85,15 @@ def test_hat_centre_is_not_a_press():
     assert pads.handle(event(pygame.JOYHATMOTION, hat=0, value=(0, 0))) == ()
 
 
+#: An analogue stick or an axis-reporting mat - which the measured mat is not,
+#: so these cannot lean on DEFAULT_MAPPING.
+AXIS_MAPPING = {
+    'left': [{'type': 'axis', 'axis': 0, 'value': -1}],
+    'right': [{'type': 'axis', 'axis': 0, 'value': 1}],
+    'up': [{'type': 'axis', 'axis': 1, 'value': -1}],
+}
+
+
 def test_axis_fires_once_per_crossing_not_per_sample():
     """Held panels stream axis events; only the crossing is a direction change.
 
@@ -92,7 +101,7 @@ def test_axis_fires_once_per_crossing_not_per_sample():
     frame, which is harmless for movement but re-arms the turn buffer
     constantly and makes the pad feel like it is fighting the player.
     """
-    pads = GamepadManager(DEFAULT_MAPPING)
+    pads = manager(AXIS_MAPPING)
     held = event(pygame.JOYAXISMOTION, axis=0, value=-1.0)
 
     assert pads.handle(held) == ('left',)
@@ -104,13 +113,13 @@ def test_axis_fires_once_per_crossing_not_per_sample():
 
 
 def test_axis_below_the_deadzone_is_not_a_press():
-    pads = GamepadManager(DEFAULT_MAPPING)
+    pads = manager(AXIS_MAPPING)
     assert pads.handle(event(pygame.JOYAXISMOTION, axis=0, value=-0.4)) == ()
 
 
 def test_axis_state_is_tracked_per_device():
     """Two pads on one cabinet must not cancel each other's crossings."""
-    pads = GamepadManager(DEFAULT_MAPPING)
+    pads = manager(AXIS_MAPPING)
     assert pads.handle(
         event(pygame.JOYAXISMOTION, axis=0, value=-1.0, instance_id=0),
     ) == ('left',)
@@ -131,7 +140,10 @@ def test_one_control_can_drive_two_actions():
 
 def test_one_panel_bound_on_both_hat_and_axis():
     """What --calibrate records for a mat that reports a panel twice."""
-    pads = GamepadManager(DEFAULT_MAPPING)
+    pads = manager({'up': [
+        {'type': 'hat', 'hat': 0, 'axis': 'y', 'value': 1},
+        {'type': 'axis', 'axis': 1, 'value': -1},
+    ]})
     assert pads.handle(event(pygame.JOYHATMOTION, hat=0, value=(0, 1))) == ('up',)
     assert pads.handle(event(pygame.JOYAXISMOTION, axis=1, value=-1.0)) == ('up',)
 
@@ -206,6 +218,53 @@ def test_saved_file_is_valid_json_with_a_trailing_newline(tmp_path):
     raw = open(path, encoding='utf-8').read()
     assert raw.endswith('\n')
     assert json.loads(raw) == DEFAULT_MAPPING
+
+
+# -- the measured mat --------------------------------------------------------
+
+#: Recorded off the cabinet's own mat with `tools/pad_report.py` - a DragonRise
+#: 0079:0006 board wired so that all ten panels report as plain buttons.
+MEASURED_PANELS = {
+    0: ('LEFT arrow', 'left'),
+    1: ('DOWN arrow', 'down'),
+    2: ('UP arrow', 'up'),
+    3: ('RIGHT arrow', 'right'),
+    4: ('SQUARE panel', 'mute'),
+    5: ('TRIANGLE panel', 'pause'),
+    6: ('CROSS panel', 'delete'),
+    7: ('CIRCLE panel', 'select'),
+    8: ('SELECT', 'pause'),
+    9: ('START', 'select'),
+}
+
+
+@pytest.mark.parametrize('button, panel, action', [
+    (b, name, action) for b, (name, action) in MEASURED_PANELS.items()
+])
+def test_default_mapping_matches_the_measured_mat(button, panel, action):
+    pads = GamepadManager(DEFAULT_MAPPING)
+    assert pads.handle(event(pygame.JOYBUTTONDOWN, button=button)) == (action,), (
+        f'{panel} (button {button}) should be {action}'
+    )
+
+
+def test_default_binds_no_direction_to_an_axis():
+    """This board parks its unused analogue axes at full deflection.
+
+    A direction bound to one would steer the game with nobody on the mat, so
+    the default must not carry axis bindings even though the descriptor
+    advertises four axes.
+    """
+    for action in ('up', 'down', 'left', 'right'):
+        kinds = {b['type'] for b in DEFAULT_MAPPING['bindings'][action]}
+        assert 'axis' not in kinds, f'{action} is bound to an axis'
+
+
+def test_spare_button_indices_do_nothing():
+    """The board reports 12 buttons; the mat only wires 10."""
+    pads = GamepadManager(DEFAULT_MAPPING)
+    assert pads.handle(event(pygame.JOYBUTTONDOWN, button=10)) == ()
+    assert pads.handle(event(pygame.JOYBUTTONDOWN, button=11)) == ()
 
 
 def test_default_mapping_only_names_real_actions():

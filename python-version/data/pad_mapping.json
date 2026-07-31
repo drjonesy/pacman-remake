@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "device": null,
+  "deadzone": 0.5,
+  "bindings": {
+    "up": [
+      {
+        "type": "button",
+        "button": 2
+      }
+    ],
+    "down": [
+      {
+        "type": "button",
+        "button": 1
+      }
+    ],
+    "left": [
+      {
+        "type": "button",
+        "button": 0
+      }
+    ],
+    "right": [
+      {
+        "type": "button",
+        "button": 3
+      }
+    ],
+    "select": [
+      {
+        "type": "button",
+        "button": 9
+      },
+      {
+        "type": "button",
+        "button": 7
+      }
+    ],
+    "pause": [
+      {
+        "type": "button",
+        "button": 8
+      },
+      {
+        "type": "button",
+        "button": 5
+      }
+    ],
+    "delete": [
+      {
+        "type": "button",
+        "button": 6
+      }
+    ],
+    "mute": [
+      {
+        "type": "button",
+        "button": 4
+      }
+    ]
+  }
+}

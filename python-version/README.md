@@ -95,8 +95,9 @@ untouched. It writes a working `data/pad_mapping.json` as it goes, so a clean
 run leaves nothing else to do. It imports nothing from `pacman/`, so it can be
 copied to a Pi on its own; it needs only pygame.
 
-`--calibrate` prompts for one control at a time and records what the pad
-actually sent. For a 10-panel DDR mat the prompts map to:
+`gamepad_test.py --calibrate` is the shorter path: it prompts for the eight
+controls the game actually uses rather than all ten panels, and writes the same
+mapping file without the raw log. For a DDR mat the prompts map to:
 
 | Prompt | Panel | In-game |
 |---|---|---|
@@ -106,9 +107,9 @@ actually sent. For a 10-panel DDR mat the prompts map to:
 | pause | **SELECT** | Pause during play |
 | mute | **□** | Toggle sound |
 
-`○` and `△` are left unbound; press ESC (or wait) at any prompt to skip it.
-Bind them to `select` and `pause` by hand afterwards if you want a second
-button for each — the file takes a list per action:
+It leaves `○` and `△` unbound — `pad_report.py` is the one that covers all ten
+panels. Press ESC (or wait) at any prompt to skip it. Either way, an action
+takes a *list*, so a second button can be added by hand:
 
 ```json
 {
@@ -116,41 +117,57 @@ button for each — the file takes a list per action:
   "device": null,
   "deadzone": 0.5,
   "bindings": {
-    "up":     [{ "type": "hat", "hat": 0, "axis": "y", "value": 1 }],
+    "up":     [{ "type": "button", "button": 2 }],
     "select": [{ "type": "button", "button": 9 },
-               { "type": "button", "button": 1 }]
+               { "type": "button", "button": 7 }]
   }
 }
 ```
 
 Four binding forms are understood — `button`, `hat`, `axis`, and `key` (for
-mats that enumerate as an HID *keyboard* rather than a gamepad). Many mats
-report one arrow on **both** a hat and an axis; the calibrator records both,
-which is correct and not a bug.
+mats that enumerate as an HID *keyboard* rather than a gamepad). Some mats
+report one arrow on **both** a hat and an axis; both tools record both, which is
+correct and not a bug.
 
 The file is worth committing once it works — it survives a re-clone onto the Pi.
 
-#### The default mapping
+#### The measured mat
 
-Until that file exists, the built-in default targets the **DragonRise /
-Microntek PSX-to-USB adapter** (USB `0079:0006`, `Name="Microntek USB
-Joystick"`), which is the board inside most cheap USB dance mats. It exposes 12
-buttons in PSX order, one hat, and four axes:
+`data/pad_mapping.json` is committed, and the built-in default matches it, so
+the cabinet's mat works with no setup. It is a **DragonRise / Microntek
+PSX-to-USB board** (USB `0079:0006`, `Name="Microntek USB Joystick"`) wired to a
+10-panel mat, and it reports **every panel as a plain button**:
 
-| Control | Button | Action |
+| Button | Panel | Action |
 |---|---|---|
-| △ | 0 | pause |
-| ○ | 1 | select |
-| ✕ | 2 | delete |
-| □ | 3 | mute |
-| L1 / R1 | 6 / 7 | pause (for a gamepad or encoder — a mat has neither) |
-| SELECT | 8 | pause |
-| START | 9 | select |
+| 0 | ← arrow | left |
+| 1 | ↓ arrow | down |
+| 2 | ↑ arrow | up |
+| 3 | → arrow | right |
+| 4 | □ | mute |
+| 5 | △ | pause |
+| 6 | ✕ | delete |
+| 7 | ○ | select |
+| 8 | SELECT | pause |
+| 9 | START | select |
 
-Arrows are bound on both hat 0 and axes 0/1, since mats differ on which they
-use. Calibrating replaces all of this with what your mat actually sends.
+Buttons 10 and 11 exist on the board but nothing on the mat is wired to them.
 
-To confirm the numbering independently of pygame:
+Two things about this are worth knowing, because they are not what a gamepad
+would do:
+
+- **The arrows are buttons, not the hat.** The descriptor advertises a hat and
+  four axes, but a PSX controller's d-pad and sticks have nothing soldered to
+  them on a mat. On a PlayStation dance pad the arrow panels *are* the face
+  buttons, and the corner shape panels take the shoulder indices — which is
+  exactly the order above.
+- **No direction is bound to an axis.** This board parks its unused analogue
+  axes at full deflection often enough that a direction bound to one would
+  steer the game with nobody standing on the mat. Hat bindings are kept so an
+  ordinary gamepad or arcade encoder still works; axis bindings are not.
+
+A different mat will differ — calibrating replaces all of this. To confirm the
+numbering independently of pygame:
 
 ```bash
 sudo apt install joystick
@@ -182,8 +199,10 @@ Three failure modes are worth knowing:
   cabling. Try the USB 2.0 ports, and a powered hub before suspecting the mat.
 - **Pac-Man drifts one direction on its own.** A PSX adapter with no analogue
   stick attached can park an axis at full deflection instead of centre. Delete
-  the `axis` entries from the four directions in `pad_mapping.json`, leaving the
-  `hat` ones — the mat's arrows are on the hat.
+  the `axis` entries from the four directions in `pad_mapping.json`. The
+  committed mapping has none for exactly this reason; `pad_report.py` flags a
+  stuck axis in its RESTING STATE section and leaves it out of what it
+  generates.
 
 Over SSH the tool falls back to SDL's dummy video driver, so joystick
 calibration works headless; only keyboard-HID detection needs a real screen.
@@ -256,7 +275,7 @@ pacman/
 tools/convert_assets.py    build-time SVG->PNG, MP3->OGG
 tools/gamepad_test.py      pad identification + calibration
 tools/pad_report.py        per-panel raw event log (standalone; pygame only)
-tests/                     290 tests
+tests/                     302 tests
 ```
 
 The browser's `window.dispatchEvent` messaging is replaced by a small internal
@@ -359,7 +378,7 @@ way to turn the machine off.
 .venv/bin/python -m pytest tests/ -q
 ```
 
-290 tests, all headless — no display and no audio device required. Coverage is
+302 tests, all headless — no display and no audio device required. Coverage is
 aimed at what is easy to break and hard to spot: ghost-house respawn at 120Hz
 from all four corners, ghost targeting per ghost per mode (including Inky's
 mirror math and Clyde's 8-tile flip), the scared-mode distance inversion, the

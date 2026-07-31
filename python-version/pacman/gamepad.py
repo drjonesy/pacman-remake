@@ -36,52 +36,60 @@ MAPPING_FILE = os.path.join(
 # matters for analogue sticks.
 DEFAULT_DEADZONE = 0.5
 
-# Aimed at the DragonRise/Microntek PSX-to-USB adapter (USB 0079:0006, reported
-# by the kernel as "Microntek USB Joystick"), which is the board inside most
-# cheap USB dance mats. It exposes 12 buttons in PSX order - 0 triangle,
-# 1 circle, 2 cross, 3 square, 4-7 shoulders, 8 SELECT, 9 START - plus one hat
-# and four axes.
+# Measured on the target cabinet's mat: a DragonRise/Microntek PSX-to-USB board
+# (USB 0079:0006, kernel name "Microntek USB Joystick") wired to a 10-panel mat.
 #
-# Arrows are bound on both the hat and axes 0/1 because mats differ on which
-# they use and some send both; the shoulder indices 6/7 are kept on pause so a
-# plain gamepad or arcade encoder still works. This is only what is used until
-# `tools/gamepad_test.py --calibrate` writes the real thing.
+# The mat reports **all ten panels as plain buttons**. Its descriptor also
+# advertises a hat and four axes, but nothing on the mat drives them - a PSX
+# controller's would-be d-pad and sticks simply have nothing soldered to them.
+# So the arrow panels are buttons 0-3, not the hat that a gamepad would use:
+#
+#   0 LEFT    1 DOWN    2 UP    3 RIGHT      <- the four arrows
+#   4 square  5 tri     6 cross 7 circle     <- the four shape panels
+#   8 SELECT  9 START                        (10 and 11 exist but are unused)
+#
+# That arrow order is not arbitrary: on a PlayStation dance mat the arrows *are*
+# the face buttons, and the corner shape panels get the shoulder indices.
+#
+# Hat bindings are kept alongside so an ordinary gamepad or arcade encoder still
+# works out of the box. Axis bindings are deliberately absent: this board parks
+# its unused analogue axes at full deflection often enough that binding a
+# direction to one can steer the game on its own. A pad that genuinely needs
+# them can say so in `data/pad_mapping.json`, which overrides all of this.
 DEFAULT_MAPPING = {
     'version': 1,
     'device': None,
     'deadzone': DEFAULT_DEADZONE,
     'bindings': {
         'up': [
+            {'type': 'button', 'button': 2},
             {'type': 'hat', 'hat': 0, 'axis': 'y', 'value': 1},
-            {'type': 'axis', 'axis': 1, 'value': -1},
         ],
         'down': [
+            {'type': 'button', 'button': 1},
             {'type': 'hat', 'hat': 0, 'axis': 'y', 'value': -1},
-            {'type': 'axis', 'axis': 1, 'value': 1},
         ],
         'left': [
+            {'type': 'button', 'button': 0},
             {'type': 'hat', 'hat': 0, 'axis': 'x', 'value': -1},
-            {'type': 'axis', 'axis': 0, 'value': -1},
         ],
         'right': [
+            {'type': 'button', 'button': 3},
             {'type': 'hat', 'hat': 0, 'axis': 'x', 'value': 1},
-            {'type': 'axis', 'axis': 0, 'value': 1},
         ],
         'select': [
             {'type': 'button', 'button': 9},   # START
-            {'type': 'button', 'button': 1},   # circle
+            {'type': 'button', 'button': 7},   # circle panel
         ],
         'delete': [
-            {'type': 'button', 'button': 2},   # cross
+            {'type': 'button', 'button': 6},   # cross panel
         ],
         'pause': [
             {'type': 'button', 'button': 8},   # SELECT
-            {'type': 'button', 'button': 0},   # triangle
-            {'type': 'button', 'button': 6},   # shoulders, for a gamepad or
-            {'type': 'button', 'button': 7},   # an arcade encoder
+            {'type': 'button', 'button': 5},   # triangle panel
         ],
         'mute': [
-            {'type': 'button', 'button': 3},   # square
+            {'type': 'button', 'button': 4},   # square panel
         ],
     },
 }
