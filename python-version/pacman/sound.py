@@ -12,10 +12,11 @@ Two details are deliberate:
   run of dots queues rather than stacking (engine.js:3256).
 """
 
-import json
 import os
 
 import pygame
+
+from . import settings
 
 ASSET_ROOT = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'assets',
@@ -26,10 +27,7 @@ DOT_CHANNEL = 1
 RESERVED_CHANNELS = 2
 TOTAL_CHANNELS = 12
 
-SETTINGS_FILE = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    'data', 'settings.json',
-)
+SETTINGS_FILE = settings.SETTINGS_FILE
 
 
 class SoundManager:
@@ -82,25 +80,17 @@ class SoundManager:
 
     def load_volume_preference(self):
         """Stands in for localStorage.getItem('volumePreference')."""
-        try:
-            with open(self.settings_file, encoding='utf-8') as handle:
-                value = json.load(handle).get('volume', 1)
-        except (OSError, ValueError):
-            return 1
+        value = settings.read(self.settings_file).get('volume', 1)
         return 0 if value == 0 else 1
 
     def save_volume_preference(self, volume):
-        """Stands in for localStorage.setItem (engine.js:1335)."""
-        try:
-            os.makedirs(os.path.dirname(self.settings_file) or '.', exist_ok=True)
-            tmp = f'{self.settings_file}.tmp'
-            with open(tmp, 'w', encoding='utf-8') as handle:
-                json.dump({'volume': volume}, handle)
-                handle.write('\n')
-            os.replace(tmp, self.settings_file)
-        except OSError:
-            # A read-only filesystem should not stop the game.
-            pass
+        """Stands in for localStorage.setItem (engine.js:1335).
+
+        Merges rather than replaces: the controller choice lives in the same
+        file, and writing `{"volume": ...}` wholesale would drop it. A
+        read-only filesystem is ignored, as it was before.
+        """
+        settings.update({'volume': volume}, self.settings_file)
 
     # -- state ---------------------------------------------------------------
 

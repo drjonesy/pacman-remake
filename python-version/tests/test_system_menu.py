@@ -12,11 +12,13 @@ panels while the game is driven by actions, and the two disagree about what
 import pygame
 import pytest
 
+from pacman.controls import KEYBOARD, PAD, SCHEME_ORDER, Controls
 from pacman.gamepad import DEFAULT_MAPPING, GamepadManager
 from pacman.leaderboard import Leaderboard
 from pacman.ui.system_menu import (
-    CODE, DONE_MS, IDLE_TIMEOUT_MS, OPTIONS, STAGE_CODE, STAGE_CONFIRM,
-    STAGE_DONE, STAGE_OPTIONS, SystemMenu,
+    CODE_PANELS, DEFAULT_CODE, DONE_MS, IDLE_TIMEOUT_MS, OPTIONS,
+    RESULT_CLEARED, RESULT_INCORRECT, STAGE_CODE, STAGE_CONFIRM,
+    STAGE_DONE, STAGE_OPTIONS, SystemMenu, load_code,
 )
 
 pygame.init()
@@ -42,16 +44,34 @@ def board():
 
 
 @pytest.fixture
-def menu(board):
+def controls(tmp_path):
+    # An explicit name and a throwaway path: never reads or writes the real
+    # data/settings.json, so these tests do not depend on machine state.
+    return Controls(name=KEYBOARD, path=str(tmp_path / 'settings.json'))
+
+
+@pytest.fixture
+def menu(board, controls):
     # renderer and font are only touched by draw(), which is not under test.
-    return SystemMenu(None, None, board)
+    return SystemMenu(None, None, board, controls=controls)
+
+
+def open_reset(menu):
+    """Open the menu and step into the reset gate.
+
+    RESET SCORES is not the first row - CONTROLLER leads the list - so this
+    cannot just select whatever the cursor starts on.
+    """
+    menu.open_menu()
+    menu.index = option_index('reset')
+    menu.feed(panels=('select',))
 
 
 def option_index(name):
     return [key for key, _ in OPTIONS].index(name)
 
 
-def enter_code(menu, panels=CODE):
+def enter_code(menu, panels=DEFAULT_CODE):
     for panel in panels:
         menu.feed(panels=(panel,))
 
@@ -157,12 +177,71 @@ def test_start_panel_does_not_pick_an_option(menu):
     assert exits == []
 
 
+# -- controller picker -------------------------------------------------------
+
+def open_controls(menu):
+    menu.open_menu()
+    menu.index = option_index('controls')
+    menu.feed(panels=('select',))
+
+
+def test_controls_stage_starts_on_the_active_scheme(menu, controls):
+    """The list doubles as a readout of what is in force."""
+    controls.name = PAD
+    open_controls(menu)
+    assert SCHEME_ORDER[menu.index] == PAD
+
+
+def test_choosing_a_scheme_switches_and_closes(menu, controls):
+    open_controls(menu)
+    menu.index = SCHEME_ORDER.index(PAD)
+    menu.feed(panels=('select',))
+
+    assert controls.name == PAD
+    assert not menu.open
+
+
+def test_choosing_the_active_scheme_is_a_harmless_exit(menu, controls):
+    """The cursor starts on it, so SELECT twice is the way out of this stage."""
+    open_controls(menu)
+    menu.feed(panels=('select',))
+
+    assert controls.name == KEYBOARD
+    assert not menu.open
+
+
+def test_the_scheme_survives_a_restart(tmp_path):
+    path = str(tmp_path / 'settings.json')
+    Controls(name=KEYBOARD, path=path).select(PAD)
+    assert Controls(path=path).name == PAD
+
+
+def test_switching_scheme_does_not_touch_the_reset_gate(menu, board, controls):
+    open_controls(menu)
+    menu.index = SCHEME_ORDER.index(PAD)
+    menu.feed(panels=('select',))
+
+    open_reset(menu)
+    enter_code(menu)
+    menu.feed(panels=('start',))
+    assert board.reset_calls == 1
+
+
+def test_labels_differ_between_the_two_schemes():
+    from pacman.controls import SCHEMES
+    keyboard, pad = SCHEMES[KEYBOARD], SCHEMES[PAD]
+    assert keyboard.start == 'ENTER' and pad.start == 'START'
+    assert keyboard.pause != pad.pause
+    assert keyboard.sound != pad.sound
+
+
 # -- reset gate --------------------------------------------------------------
 
 def test_full_code_then_start_clears_the_board(menu, board):
     resets = []
     menu.open_menu(on_reset=lambda: resets.append(True))
-    menu.feed(panels=('select',))         # RESET SCORES
+    menu.index = option_index('reset')
+    menu.feed(panels=('select',))
     assert menu.stage == STAGE_CODE
 
     enter_code(menu)
@@ -179,41 +258,98 @@ def test_full_code_then_start_clears_the_board(menu, board):
 
 
 def test_start_before_the_code_is_complete_does_nothing(menu, board):
-    menu.open_menu()
-    menu.feed(panels=('select',))
-    enter_code(menu, CODE[:3])
+    open_reset(menu)
+    enter_code(menu, DEFAULT_CODE[:3])
 
     menu.feed(panels=('start',))
     assert board.reset_calls == 0
     assert menu.stage == STAGE_CODE
 
 
-def test_wrong_panel_restarts_the_code(menu, board):
-    menu.open_menu()
-    menu.feed(panels=('select',))
+def wrong_code(code=DEFAULT_CODE):
+    """A sequence of the same length that is not the code."""
+    other = tuple(reversed(code))
+    return other if other != tuple(code) else (code[0],) * len(code)
 
-    menu.feed(panels=('cross',))
-    assert menu.progress == 1
-    menu.feed(panels=('triangle',))       # square was expected
-    assert menu.progress == 0
 
-    # Finishing the *remaining* panels must not arm the confirm.
-    enter_code(menu, CODE[1:])
-    assert menu.stage == STAGE_CODE
+def test_a_wrong_panel_is_accepted_without_comment(menu):
+    """The gate must not say *which* press was wrong.
+
+    Rejecting per press would leak the code one position at a time - four
+    guesses per slot instead of a blind search over every sequence.
+    """
+    open_reset(menu)
+
+    menu.feed(panels=(wrong_code()[0],))
+    assert len(menu.entered) == 1         # counted, not rejected
+    assert menu.stage == STAGE_CODE       # and no visible change of state
+
+
+def test_a_wrong_code_reaches_confirm_then_is_refused(menu, board):
+    open_reset(menu)
+    enter_code(menu, wrong_code())
+
+    # Indistinguishable from a correct code until START is pressed.
+    assert menu.stage == STAGE_CONFIRM
+
+    menu.feed(panels=('start',))
+    assert board.reset_calls == 0
+    assert menu.result == RESULT_INCORRECT
+    assert menu.stage == STAGE_DONE
+
+    menu.tick(DONE_MS)
+    assert not menu.open
+
+
+def test_a_refused_code_cannot_be_resubmitted(menu, board):
+    """START must not be repeatable against a sequence still held in memory."""
+    open_reset(menu)
+    enter_code(menu, wrong_code())
+    menu.feed(panels=('start',))
+
+    for _ in range(3):
+        menu.feed(panels=('start',))
     assert board.reset_calls == 0
 
 
-def test_out_of_order_code_never_arms_confirm(menu):
-    menu.open_menu()
-    menu.feed(panels=('select',))
-    enter_code(menu, tuple(reversed(CODE)))
-    assert menu.stage == STAGE_CODE
+def test_overlong_input_does_not_slide_into_a_match(menu, board):
+    """Pressing extra panels first must not leave a matching tail behind.
+
+    A naive 'compare the last N presses' check would let someone mash every
+    panel and hit the code by accident.
+    """
+    open_reset(menu)
+    enter_code(menu, (wrong_code()[0],) + tuple(DEFAULT_CODE))
+
+    menu.feed(panels=('start',))
+    assert board.reset_calls == 0
+
+
+def test_correct_code_is_order_sensitive(menu, board):
+    open_reset(menu)
+    enter_code(menu, tuple(reversed(DEFAULT_CODE)))
+    menu.feed(panels=('start',))
+    assert board.reset_calls == 0
+
+
+def test_a_custom_code_replaces_the_default(board, controls):
+    menu = SystemMenu(None, None, board, code=('circle', 'circle', 'cross'),
+                      controls=controls)
+    open_reset(menu)
+
+    enter_code(menu, DEFAULT_CODE)
+    assert board.reset_calls == 0         # the default must no longer work
+
+    open_reset(menu)
+    enter_code(menu, ('circle', 'circle', 'cross'))
+    menu.feed(panels=('start',))
+    assert board.reset_calls == 1
+    assert menu.result == RESULT_CLEARED
 
 
 def test_select_backs_out_of_the_code_stage(menu, board):
     """Otherwise a half-entered code is a dead end on a keyboardless cabinet."""
-    menu.open_menu()
-    menu.feed(panels=('select',))
+    open_reset(menu)
     menu.feed(panels=('cross',))
     menu.feed(panels=('select',))
 
@@ -222,14 +358,63 @@ def test_select_backs_out_of_the_code_stage(menu, board):
 
 
 def test_reopening_forgets_previous_progress(menu):
-    menu.open_menu()
-    menu.feed(panels=('select',))
-    enter_code(menu, CODE[:2])
+    open_reset(menu)
+    enter_code(menu, DEFAULT_CODE[:2])
     menu.close()
 
     menu.open_menu()
     assert menu.stage == STAGE_OPTIONS
-    assert menu.progress == 0
+    assert menu.entered == []
+
+
+# -- passcode file -----------------------------------------------------------
+
+def write_code(tmp_path, payload):
+    import json
+    path = tmp_path / 'passcode.json'
+    path.write_text(json.dumps(payload), encoding='utf-8')
+    return str(path)
+
+
+def test_code_is_read_from_the_file(tmp_path):
+    path = write_code(tmp_path, {'code': ['circle', 'cross', 'circle']})
+    assert load_code(path) == ('circle', 'cross', 'circle')
+
+
+def test_a_bare_list_is_accepted(tmp_path):
+    path = write_code(tmp_path, ['cross', 'cross', 'square'])
+    assert load_code(path) == ('cross', 'cross', 'square')
+
+
+def test_missing_file_falls_back_to_the_default(tmp_path):
+    assert load_code(str(tmp_path / 'nope.json')) == DEFAULT_CODE
+
+
+@pytest.mark.parametrize('payload', [
+    {'code': []},                          # would reset on a bare START
+    {'code': ['cross']},                   # under the minimum length
+    {'code': ['cross'] * 40},              # unenterable before the timeout
+    {'code': ['cross', 'up', 'square']},   # not a shape panel
+    {'code': ['cross', 3, 'square']},      # not even a name
+    {'code': 'crosssquare'},               # a string, not a list
+    {'nope': ['cross', 'square', 'circle']},
+    'not an object',
+    42,
+])
+def test_unusable_files_fall_back_rather_than_raise(tmp_path, payload):
+    """A hand-edited file must never make the cabinet unbootable."""
+    assert load_code(write_code(tmp_path, payload)) == DEFAULT_CODE
+
+
+def test_corrupt_json_falls_back(tmp_path):
+    path = tmp_path / 'passcode.json'
+    path.write_text('{"code": [', encoding='utf-8')
+    assert load_code(str(path)) == DEFAULT_CODE
+
+
+def test_every_default_panel_is_enterable():
+    """The default must be drawn from panels the code stage actually accepts."""
+    assert all(panel in CODE_PANELS for panel in DEFAULT_CODE)
 
 
 # -- timeout -----------------------------------------------------------------
@@ -252,15 +437,14 @@ def test_input_resets_the_idle_timer(menu):
 
 # -- integration -------------------------------------------------------------
 
-def test_reset_actually_empties_the_file(tmp_path):
+def test_reset_actually_empties_the_file(tmp_path, controls):
     data_file = tmp_path / 'data.json'
     board = Leaderboard(str(data_file))
     board.submit_score('RYAN', 4200)
     assert board.read_scores()
 
-    menu = SystemMenu(None, None, board)
-    menu.open_menu()
-    menu.feed(panels=('select',))
+    menu = SystemMenu(None, None, board, controls=controls)
+    open_reset(menu)
     enter_code(menu)
     menu.feed(panels=('start',))
 
@@ -273,8 +457,7 @@ def test_a_failed_write_still_closes_the_menu(menu):
             raise OSError('read-only filesystem')
 
     menu.leaderboard = Broken()
-    menu.open_menu()
-    menu.feed(panels=('select',))
+    open_reset(menu)
     enter_code(menu)
     menu.feed(panels=('start',))
 

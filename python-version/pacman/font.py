@@ -72,13 +72,6 @@ GLYPHS = {
     '*': ('00000', '00000', '01110', '01110', '01110', '00000', '00000'),
     "'": ('00100', '00100', '00000', '00000', '00000', '00000', '00000'),
     '?': ('01110', '10001', '00001', '00010', '00100', '00000', '00100'),
-    # The four shape panels, for the score-reset code in `ui/system_menu.py`.
-    # Kept on their Unicode symbols rather than letters so the prompt shows what
-    # is printed on the mat instead of spelling the words out.
-    '×': ('00000', '10001', '01010', '00100', '01010', '10001', '00000'),
-    '□': ('00000', '11111', '10001', '10001', '10001', '11111', '00000'),
-    '△': ('00100', '00100', '01010', '01010', '10001', '11111', '00000'),
-    '○': ('00000', '01110', '10001', '10001', '10001', '01110', '00000'),
 }
 
 # Anything unmapped renders as a hollow box rather than vanishing, so a missing

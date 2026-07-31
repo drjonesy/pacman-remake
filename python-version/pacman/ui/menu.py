@@ -6,6 +6,7 @@ title, cyan rank labels, white names and amber scores.
 """
 
 from .. import constants as C
+from ..controls import KEYBOARD, SCHEMES
 
 RANK_LABELS = ('1ST', '2ND', '3RD')     # Leaderboard.jsx:4
 
@@ -34,12 +35,19 @@ HINT_Y = C.LOGICAL_HEIGHT - 20
 
 
 class Menu:
-    def __init__(self, renderer, font, leaderboard):
+    def __init__(self, renderer, font, leaderboard, controls=None):
         self.renderer = renderer
         self.font = font
         self.leaderboard = leaderboard
+        # Held by reference, not copied: the operator menu can switch scheme
+        # while this object lives, and the next frame must say the new thing.
+        self.controls = controls
         self.scores = []
         self.refresh()
+
+    @property
+    def scheme(self):
+        return self.controls.scheme if self.controls else SCHEMES[KEYBOARD]
 
     def refresh(self):
         """Re-reads the board - the `leaderboardUpdated` listener's job
@@ -57,19 +65,21 @@ class Menu:
         self.draw_start_button(surface)
         self.draw_panel(surface)
         # Dark on the amber backdrop - grey would disappear into it.
+        scheme = self.scheme
         self.font.draw(
-            surface, 'ESC PAUSE   Q SOUND', C.LOGICAL_WIDTH / 2, HINT_Y,
-            C.ARCADE_DARK, align='center',
+            surface, f'{scheme.pause} PAUSE   {scheme.sound} SOUND',
+            C.LOGICAL_WIDTH / 2, HINT_Y, C.ARCADE_DARK, align='center',
         )
 
     def draw_start_button(self, surface):
         """The PLAY button from game.css:.game-start, scaled down.
 
         Amber fill, dark border, red drop shadow. The reference started a game
-        on click or on Enter (Game.jsx:36-53); with no mouse, Enter is the only
-        way in, so the label says so.
+        on click or on Enter (Game.jsx:36-53); with no mouse there is only the
+        key, so the label names it - or the mat panel, under the pad scheme.
+        The box is measured from the label, so both widths lay out correctly.
         """
-        label = 'PRESS ENTER'
+        label = f'PRESS {self.scheme.start}'
         text_width = self.font.measure(label)[0]
 
         width = text_width + PROMPT_PADDING_X * 2

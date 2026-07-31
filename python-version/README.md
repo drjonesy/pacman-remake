@@ -68,7 +68,8 @@ list appears:
 
 | Option | Effect |
 |---|---|
-| **RESET SCORES** | Wipes the leaderboard — gated behind a code, below |
+| **CONTROLLER** | Switches the on-screen hints between keyboard and mat |
+| **RESET SCORES** | Wipes the leaderboard — gated behind a passcode, below |
 | **EXIT GAME** | Closes the game |
 | **CANCEL** | Backs out |
 
@@ -76,12 +77,53 @@ Navigate with the **up/down arrow panels** and choose with **SELECT**. It is onl
 reachable from the main menu, so it can never interrupt a run, and it closes
 itself after 20 seconds of inactivity.
 
-Choosing RESET SCORES asks for a code on the four shape panels, in this order:
+##### CONTROLLER — labelling for the mat
 
-> **✕ → ▢ → △ → ○**, then **START** to confirm.
+The hints were written for a keyboard — PRESS ENTER, ESC PAUSE, Q SOUND — none of
+which means anything to someone standing on a dance mat. Choose **DDR PAD** and
+they become the panel names instead:
 
-Any wrong panel restarts the code, and SELECT backs out at any point. Nothing is
-written until START is pressed on the confirm screen.
+| Screen | Keyboard | DDR pad |
+|---|---|---|
+| Main menu button | PRESS ENTER | PRESS START |
+| Main menu hint | ESC PAUSE   Q SOUND | SELECT PAUSE   SQUARE SOUND |
+| Name entry | ARROWS MOVE  ENTER PICK | ARROWS MOVE  START PICK |
+| This menu | ENTER PICKS / ESC CANCELS | SELECT PICKS / SELECT CANCELS |
+
+This is **labelling only** — both input paths stay live under either scheme, so a
+wrong choice can never lock anyone out of a machine with no keyboard. The worst
+case is misleading text. The cursor opens on whichever scheme is active, so
+pressing SELECT straight away is a no-op exit.
+
+The choice is saved in `data/settings.json` and survives a restart. Note that
+under the pad scheme, PAUSE is listed as SELECT: on the main menu that panel
+opens this operator menu instead, but during play it does pause.
+
+##### RESET SCORES
+
+Choosing RESET SCORES asks for a **passcode** entered on the four shape panels,
+then **START** to confirm. SELECT backs out at any point, and nothing is written
+until START is pressed.
+
+Entry is masked — the slots fill in but never show which panel was pressed — and
+nothing is checked until START. A wrong panel is accepted silently and the whole
+sequence is compared at the end, which matters: rejecting each press as it came
+would leak the code one position at a time, turning a search over every sequence
+into four guesses per slot.
+
+##### Setting your own passcode
+
+The built-in default is in `pacman/ui/system_menu.py`, so it is public — anyone
+who can read this repository knows it. To set a real one, create
+`data/passcode.json` (gitignored, so it never leaves the Pi):
+
+```json
+{ "code": ["circle", "cross", "cross", "triangle", "square"] }
+```
+
+Any 3–10 panels from `cross`, `square`, `triangle`, `circle`, repeats allowed.
+A missing or unparseable file falls back to the default rather than locking you
+out. The file is read once at launch, so restart the game after editing it.
 
 Two details worth knowing if you change this:
 
@@ -102,8 +144,8 @@ Two details worth knowing if you change this:
   two feet on a mat. One panel needs none of that.
 
 Without a pad, **Ctrl-R** opens the same menu; inside it the arrow keys
-navigate, **X / S / T / C** stand in for the four shapes, **Enter** for
-SELECT and START, and **Esc** closes.
+navigate, **X / S / T / C** stand in for cross / square / triangle / circle,
+**Enter** for SELECT and START, and **Esc** closes.
 
 #### Calibrating a pad
 

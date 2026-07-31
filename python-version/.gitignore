@@ -11,6 +11,9 @@ data/settings.json.tmp
 # pad_mapping.json itself is *not* ignored: it is worth calibrating once and
 # committing, so a re-clone onto the Pi does not mean stepping through it again.
 data/pad_mapping.json.tmp
+# The score-reset passcode is a secret; committing it would defeat the point.
+# Absent, the game falls back to the public default in ui/system_menu.py.
+data/passcode.json
 pad-report.txt
 
 # Console output from a desktop-launched run; regenerated every launch.

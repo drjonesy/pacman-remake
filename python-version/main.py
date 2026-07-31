@@ -99,6 +99,7 @@ def main(argv=None):
             )
         logical = window
 
+    from pacman.controls import Controls
     from pacman.coordinator import STATE_MENU, STATE_PLAYING, GameCoordinator
     from pacman.engine import GameEngine
     from pacman.gamepad import MAPPING_FILE, GamepadManager, load_mapping
@@ -119,10 +120,14 @@ def main(argv=None):
     coordinator = GameCoordinator(renderer, sound_manager, leaderboard)
     coordinator.show_fps = args.fps
 
+    # One shared object, mutated in place by the operator menu, so every
+    # screen picks up a change of scheme on the next frame.
+    controls = Controls()
+
     hud = Hud(renderer, font)
-    menu = Menu(renderer, font, leaderboard)
-    score_entry = ScoreEntry(renderer, font, leaderboard)
-    system_menu = SystemMenu(renderer, font, leaderboard)
+    menu = Menu(renderer, font, leaderboard, controls)
+    score_entry = ScoreEntry(renderer, font, leaderboard, controls)
+    system_menu = SystemMenu(renderer, font, leaderboard, controls=controls)
 
     def on_score_saved():
         # The HIGH SCORE readout mirrors first place, so both it and the menu

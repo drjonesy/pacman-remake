@@ -7,6 +7,7 @@ built it as a key grid rather than a text input (ScoreEntry.jsx:8-11).
 """
 
 from .. import constants as C
+from ..controls import KEYBOARD, SCHEMES
 
 LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
@@ -53,10 +54,12 @@ class ScoreEntry:
     `main.py` simply routes input to this object instead of the game.
     """
 
-    def __init__(self, renderer, font, leaderboard):
+    def __init__(self, renderer, font, leaderboard, controls=None):
         self.renderer = renderer
         self.font = font
         self.leaderboard = leaderboard
+        # By reference - see the note in `ui/menu.py`.
+        self.controls = controls
 
         self.open = False
         self.pending_score = None
@@ -153,8 +156,10 @@ class ScoreEntry:
         self.draw_slots(surface, blink_ms)
         self.draw_keyboard(surface)
 
-        self.font.draw(surface, 'ARROWS MOVE  ENTER PICK', C.LOGICAL_WIDTH / 2,
-                       HINT_Y, C.ARCADE_GREY, align='center')
+        scheme = self.controls.scheme if self.controls else SCHEMES[KEYBOARD]
+        self.font.draw(surface, f'{scheme.move} MOVE  {scheme.pick} PICK',
+                       C.LOGICAL_WIDTH / 2, HINT_Y, C.ARCADE_GREY,
+                       align='center')
 
     def draw_slots(self, surface, blink_ms):
         """Ten underlined character slots with a blinking caret."""
