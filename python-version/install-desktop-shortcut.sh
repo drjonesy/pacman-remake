@@ -25,7 +25,7 @@ Name=Pacman
 Comment=Pacman remake (pygame)
 Exec=$HERE/run-game.sh
 Path=$HERE
-Icon=$HERE/assets/sprites/pacman_logo.png
+Icon=$HERE/assets/icon.png
 Terminal=false
 Categories=Game;ArcadeGame;
 EOF
