@@ -8,3 +8,7 @@ __pycache__/
 data/data.json.tmp
 data/settings.json
 data/settings.json.tmp
+# pad_mapping.json itself is *not* ignored: it is worth calibrating once and
+# committing, so a re-clone onto the Pi does not mean stepping through it again.
+data/pad_mapping.json.tmp
+pad-report.txt

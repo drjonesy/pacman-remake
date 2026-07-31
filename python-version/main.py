@@ -34,6 +34,10 @@ def parse_args(argv=None):
                              '(equivalent to npm run reset)')
     parser.add_argument('--audio-buffer', type=int, default=AUDIO_BUFFER,
                         metavar='N', help='mixer buffer size (default: 512)')
+    parser.add_argument('--pad-mapping', default=None, metavar='PATH',
+                        help='gamepad / dance-pad binding table '
+                             '(default: data/pad_mapping.json, written by '
+                             'tools/gamepad_test.py --calibrate)')
     return parser.parse_args(argv)
 
 
@@ -97,6 +101,7 @@ def main(argv=None):
 
     from pacman.coordinator import STATE_MENU, STATE_PLAYING, GameCoordinator
     from pacman.engine import GameEngine
+    from pacman.gamepad import MAPPING_FILE, GamepadManager, load_mapping
     from pacman.font import BitmapFont
     from pacman.renderer import AssetStore, Renderer
     from pacman.sound import SoundManager
@@ -140,14 +145,9 @@ def main(argv=None):
         pygame.K_RIGHT: 'right',
     }
 
-    joysticks = []
-    for index in range(pygame.joystick.get_count()):
-        stick = pygame.joystick.Joystick(index)
-        stick.init()
-        joysticks.append(stick)
-
-    AXIS_DEADZONE = 0.5
-    axis_direction = {'x': None, 'y': None}
+    pads = GamepadManager(
+        load_mapping(args.pad_mapping or MAPPING_FILE),
+    ).open_all()
 
     state = {'running': True, 'ui_clock_ms': 0.0}
 
@@ -178,7 +178,38 @@ def main(argv=None):
         if not score_entry.open and coordinator.state == STATE_PLAYING:
             coordinator.handle_pause_key()
 
+    def handle_mute():
+        if not score_entry.open:
+            sound_manager.toggle_mute()
+
+    # Everything a pad can do, and the only things it can do. Quit is absent on
+    # purpose: a stray panel press must not be able to close the game.
+    pad_actions = {
+        'up': lambda: handle_direction('up'),
+        'down': lambda: handle_direction('down'),
+        'left': lambda: handle_direction('left'),
+        'right': lambda: handle_direction('right'),
+        'select': handle_select,
+        'delete': handle_delete,
+        'pause': handle_pause,
+        'mute': handle_mute,
+    }
+
+    def dispatch(actions):
+        for action in actions:
+            handler = pad_actions.get(action)
+            if handler is not None:
+                handler()
+
     def handle_keydown(event):
+        # A mat that enumerates as an HID keyboard gets first refusal, so its
+        # panels win over whatever those keys would otherwise mean. Only
+        # populated if the mapping file actually contains `key` bindings.
+        pad_bound = pads.key_actions(event)
+        if pad_bound:
+            dispatch(pad_bound)
+            return
+
         # While the modal is open it consumes everything, mirroring the
         # capture-phase listener in ScoreEntry.jsx:156.
         if event.key in movement_keys:
@@ -198,50 +229,12 @@ def main(argv=None):
         elif event.key == pygame.K_q:
             if event.mod & pygame.KMOD_CTRL:
                 quit_game()
-            elif not score_entry.open:
-                sound_manager.toggle_mute()
+            else:
+                handle_mute()
         elif event.key == pygame.K_F10:
             quit_game()
         elif event.key == pygame.K_F1:
             coordinator.show_fps = not coordinator.show_fps
-
-    def handle_joystick(event):
-        """d-pad, left stick and buttons map onto the same four actions.
-
-        Kept to direction + select + delete + pause so a USB gamepad or an
-        arcade encoder needs no special casing.
-        """
-        if event.type == pygame.JOYHATMOTION:
-            x, y = event.value
-            if x < 0:
-                handle_direction('left')
-            elif x > 0:
-                handle_direction('right')
-            if y > 0:
-                handle_direction('up')
-            elif y < 0:
-                handle_direction('down')
-        elif event.type == pygame.JOYAXISMOTION:
-            # Axes report continuously, so only act on the crossing into a
-            # direction rather than on every sample.
-            if event.axis in (0, 1):
-                key = 'x' if event.axis == 0 else 'y'
-                if event.value < -AXIS_DEADZONE:
-                    new = 'left' if key == 'x' else 'up'
-                elif event.value > AXIS_DEADZONE:
-                    new = 'right' if key == 'x' else 'down'
-                else:
-                    new = None
-                if new and new != axis_direction[key]:
-                    handle_direction(new)
-                axis_direction[key] = new
-        elif event.type == pygame.JOYBUTTONDOWN:
-            if event.button == 0:
-                handle_select()
-            elif event.button == 1:
-                handle_delete()
-            elif event.button in (6, 7):
-                handle_pause()
 
     def update(elapsed_ms):
         coordinator.update(elapsed_ms)
@@ -276,9 +269,10 @@ def main(argv=None):
                 quit_game()
             elif event.type == pygame.KEYDOWN:
                 handle_keydown(event)
-            elif event.type in (pygame.JOYHATMOTION, pygame.JOYAXISMOTION,
-                                pygame.JOYBUTTONDOWN):
-                handle_joystick(event)
+            elif event.type in GamepadManager.EVENT_TYPES:
+                # Includes the hotplug events, so a pad plugged in after launch
+                # starts working without a restart.
+                dispatch(pads.handle(event))
 
         frame_ms = clock.tick(C.RENDER_FPS)
         state['ui_clock_ms'] += frame_ms

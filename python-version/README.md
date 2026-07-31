@@ -31,6 +31,7 @@ The only runtime dependency is `pygame-ce`. There is no Node, npm, pnpm, or
 | `--no-sound` | Disable audio entirely |
 | `--audio-buffer N` | Mixer buffer size (default 512; raise to 1024 if audio underruns) |
 | `--data-file PATH` | Leaderboard JSON location |
+| `--pad-mapping PATH` | Gamepad / dance-pad binding table (default `data/pad_mapping.json`) |
 | `--reset` | Clear the leaderboard and exit (equivalent to `npm run reset`) |
 
 ## Controls
@@ -48,14 +49,133 @@ The only runtime dependency is `pygame-ce`. There is no Node, npm, pnpm, or
 Turn buffering is preserved: a direction pressed slightly *before* a junction
 still registers when you reach it. It is a large part of how the controls feel.
 
-### Gamepad / arcade encoder
+### Dance pad / gamepad / arcade encoder
 
-A USB gamepad is picked up automatically if present. D-pad and left stick move;
-button 0 selects, button 1 deletes, buttons 6/7 pause. Everything is expressed
-as direction + select + delete, so an arcade encoder needs no special casing.
+A USB pad is picked up automatically, including one plugged in *after* launch.
+Everything it can do is expressed as **direction + select + delete + pause +
+mute**, so a DDR mat, a gamepad and an arcade encoder all use the same code
+path.
 
-Quitting is keyboard-only on purpose — a stray controller button should not be
-able to close the game.
+Quitting is keyboard-only on purpose — a stray panel press should not be able to
+close the game.
+
+#### Calibrating a pad
+
+Pads disagree about which button index is which control, and two mats of the
+same model can disagree with each other. So the binding table is data, not code:
+it lives in `data/pad_mapping.json` and is written by stepping on each panel.
+
+**On the Pi, with the pad plugged in:**
+
+```bash
+.venv/bin/python tools/pad_report.py                 # walk all 10 panels, write a report
+.venv/bin/python tools/gamepad_test.py --list        # what SDL can see
+.venv/bin/python tools/gamepad_test.py               # live event monitor
+.venv/bin/python tools/gamepad_test.py --calibrate   # step on each panel
+```
+
+[`tools/pad_report.py`](tools/pad_report.py) is the one to reach for first when
+a pad misbehaves. It walks all ten panels, logs **every raw event** each one
+produced with timestamps, and writes `pad-report.txt` — which is shareable, and
+shows the things a finished mapping hides: a panel that bounces and sends one
+press three times, a panel that reports on both a hat and an axis, a switch that
+latches instead of releasing, and an axis sitting at full deflection while
+untouched. It writes a working `data/pad_mapping.json` as it goes, so a clean
+run leaves nothing else to do. It imports nothing from `pacman/`, so it can be
+copied to a Pi on its own; it needs only pygame.
+
+`--calibrate` prompts for one control at a time and records what the pad
+actually sent. For a 10-panel DDR mat the prompts map to:
+
+| Prompt | Panel | In-game |
+|---|---|---|
+| up / down / left / right | the four arrows | Move; navigate the name-entry keyboard |
+| select | **START** | Start a game; confirm a letter |
+| delete | **X** | Delete a letter during name entry |
+| pause | **SELECT** | Pause during play |
+| mute | **□** | Toggle sound |
+
+`○` and `△` are left unbound; press ESC (or wait) at any prompt to skip it.
+Bind them to `select` and `pause` by hand afterwards if you want a second
+button for each — the file takes a list per action:
+
+```json
+{
+  "version": 1,
+  "device": null,
+  "deadzone": 0.5,
+  "bindings": {
+    "up":     [{ "type": "hat", "hat": 0, "axis": "y", "value": 1 }],
+    "select": [{ "type": "button", "button": 9 },
+               { "type": "button", "button": 1 }]
+  }
+}
+```
+
+Four binding forms are understood — `button`, `hat`, `axis`, and `key` (for
+mats that enumerate as an HID *keyboard* rather than a gamepad). Many mats
+report one arrow on **both** a hat and an axis; the calibrator records both,
+which is correct and not a bug.
+
+The file is worth committing once it works — it survives a re-clone onto the Pi.
+
+#### The default mapping
+
+Until that file exists, the built-in default targets the **DragonRise /
+Microntek PSX-to-USB adapter** (USB `0079:0006`, `Name="Microntek USB
+Joystick"`), which is the board inside most cheap USB dance mats. It exposes 12
+buttons in PSX order, one hat, and four axes:
+
+| Control | Button | Action |
+|---|---|---|
+| △ | 0 | pause |
+| ○ | 1 | select |
+| ✕ | 2 | delete |
+| □ | 3 | mute |
+| L1 / R1 | 6 / 7 | pause (for a gamepad or encoder — a mat has neither) |
+| SELECT | 8 | pause |
+| START | 9 | select |
+
+Arrows are bound on both hat 0 and axes 0/1, since mats differ on which they
+use. Calibrating replaces all of this with what your mat actually sends.
+
+To confirm the numbering independently of pygame:
+
+```bash
+sudo apt install joystick
+jstest /dev/input/js0        # step on each panel and watch which index moves
+```
+
+#### When the Pi cannot see the pad at all
+
+If `--list` prints *no devices*, the problem is below SDL. In order:
+
+```bash
+lsusb                        # is the mat enumerating at all?
+ls -l /dev/input/js* /dev/input/event*
+groups                       # your user must be in `input`
+sudo usermod -aG input $USER # then log out and back in
+sudo apt install evtest && sudo evtest    # does the kernel see the panels?
+```
+
+`cat /proc/bus/input/devices` is the quickest single check — a working mat shows
+`Handlers=event5 js0` (a joystick node) and an `ABS=` line listing its axes.
+
+Three failure modes are worth knowing:
+
+- **`evtest` shows key presses, not joystick axes.** Some mats are HID
+  keyboards — `/proc/bus/input/devices` shows no `js*` handler for them. Run
+  `--calibrate` on the Pi's own screen (not over SSH — key events need a
+  focused window) and it records `key` bindings instead.
+- **`lsusb` shows nothing.** These mats draw little power but are fussy about
+  cabling. Try the USB 2.0 ports, and a powered hub before suspecting the mat.
+- **Pac-Man drifts one direction on its own.** A PSX adapter with no analogue
+  stick attached can park an axis at full deflection instead of centre. Delete
+  the `axis` entries from the four directions in `pad_mapping.json`, leaving the
+  `hat` ones — the mat's arrows are on the hat.
+
+Over SSH the tool falls back to SDL's dummy video driver, so joystick
+calibration works headless; only keyboard-HID detection needs a real screen.
 
 ## Display
 
@@ -105,8 +225,9 @@ Module boundaries mirror the JS class boundaries, which makes cross-checking
 against the reference straightforward.
 
 ```
-main.py                    entry point, window, input, gamepad
+main.py                    entry point, window, input
 pacman/
+  gamepad.py               pad bindings -> actions (dance mat, gamepad, encoder)
   constants.py             every literal, annotated with engine.js line numbers
   engine.py                the fixed-timestep loop
   coordinator.py           GameCoordinator — the game state machine
@@ -122,7 +243,9 @@ pacman/
   leaderboard.py           JSON high scores
   ui/{menu,hud,score_entry}.py
 tools/convert_assets.py    build-time SVG->PNG, MP3->OGG
-tests/                     251 tests
+tools/gamepad_test.py      pad identification + calibration
+tools/pad_report.py        per-panel raw event log (standalone; pygame only)
+tests/                     290 tests
 ```
 
 The browser's `window.dispatchEvent` messaging is replaced by a small internal
@@ -225,14 +348,15 @@ way to turn the machine off.
 .venv/bin/python -m pytest tests/ -q
 ```
 
-251 tests, all headless — no display and no audio device required. Coverage is
+290 tests, all headless — no display and no audio device required. Coverage is
 aimed at what is easy to break and hard to spot: ghost-house respawn at 120Hz
 from all four corners, ghost targeting per ghost per mode (including Inky's
 mirror math and Clyde's 8-tile flip), the scared-mode distance inversion, the
 speed formulas across levels, dot thresholds firing fruit (174/74) and Elroy
 (40/20) exactly once, the power-duration and idle-release clamps, timer
-pause/resume precedence, maze integrity, and the leaderboard's corrupt-file and
-atomic-write behaviour.
+pause/resume precedence, maze integrity, the leaderboard's corrupt-file and
+atomic-write behaviour, and pad binding resolution (a corrupt mapping file must
+degrade to the default, never strand a cabinet whose only input is a mat).
 
 The game loop and rendering are verified by playing, not by unit tests.
 
