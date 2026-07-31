@@ -1,9 +1,15 @@
-"""The SELECT+START operator menu (Pi-only; no reference counterpart).
+"""The SELECT operator menu (Pi-only; no reference counterpart).
 
 A cabinet has no keyboard, so clearing the leaderboard or shutting the game down
-used to mean SSHing in. This is that, behind a combo a player will not find by
-accident: SELECT+START on the main menu opens a short list - RESET SCORES, EXIT
-GAME, CANCEL - navigated with the arrow panels and chosen with SELECT.
+used to mean SSHing in. This is that: the SELECT panel on the main menu opens a
+short list - RESET SCORES, EXIT GAME, CANCEL - navigated with the arrow panels
+and chosen with SELECT.
+
+SELECT is free to take on the menu because it drives the `pause` action, and
+there is nothing to pause there. An earlier version needed SELECT+START
+together, which meant holding both panels' actions back for 250ms to see whether
+a combo was forming - too tight a window to hit with two feet on a mat, and it
+put a delay on starting a game. One panel needs none of that.
 
 RESET SCORES is the destructive one, so it is gated a second time behind a code
 entered on the four shape panels (cross, square, triangle, circle) followed by
@@ -11,8 +17,8 @@ START. EXIT GAME just exits; there is nothing to undo.
 
 The code is read as *physical panels* rather than the eight actions the rest of
 the game sees, which is the whole reason `gamepad.PANELS` exists. On this mat
-the shapes are already aliased to mute/pause/delete/select, so an action-level
-combo would toggle mute and pause the game while the code was being entered.
+the shapes are already aliased to mute/pause/delete/select, so reading actions
+instead would toggle mute and pause the game while the code was being entered.
 
 `main.py` only offers this on the menu screen, so it can never interrupt a run.
 """
@@ -294,63 +300,3 @@ class SystemMenu:
         self.font.draw(surface, 'SCORES CLEARED', center, BODY_Y,
                        C.ARCADE_YELLOW, align='center')
 
-
-COMBO_PANELS = ('select', 'start')
-COMBO_WINDOW_MS = 250
-
-
-class ComboWatcher:
-    """Detects SELECT+START pressed together without eating a normal press.
-
-    START drives the `select` action, so on the menu it starts a game - which it
-    would have done before the other half of the combo ever arrived. So a press
-    of either combo panel is *held* for `window_ms` rather than dispatched at
-    once: if its partner lands inside that window the pair becomes the combo and
-    neither action fires; otherwise the held press goes through, late.
-
-    The delay applies only on the menu and only to these two panels, so nothing
-    in gameplay is slowed. The one thing it can postpone is starting a game, and
-    250ms there is not perceptible - the circle panel still starts one instantly,
-    since it is bound to `select` but is not part of the combo.
-    """
-
-    def __init__(self, on_trigger, window_ms=COMBO_WINDOW_MS):
-        self.on_trigger = on_trigger
-        self.window_ms = window_ms
-        self._held = None        # {'panel', 'actions', 'ms'}
-
-    def feed(self, panels, actions):
-        """True when the event was consumed - either held back or completing."""
-        pressed = next((panel for panel in COMBO_PANELS if panel in panels), None)
-        if pressed is None:
-            return False
-
-        if self._held is not None:
-            if self._held['panel'] != pressed:
-                self._held = None
-                self.on_trigger()
-                return True
-            # A repeat of the same panel is swallowed and the window is left
-            # running. Restarting it here would mean a player stomping START on
-            # a mat could hold the window open indefinitely and never start a
-            # game; dropping the duplicate also stops a double-stomp counting
-            # twice.
-            return True
-
-        self._held = {
-            'panel': pressed, 'actions': tuple(actions), 'ms': self.window_ms,
-        }
-        return True
-
-    def tick(self, frame_ms, dispatch):
-        if self._held is None:
-            return
-        self._held['ms'] -= frame_ms
-        if self._held['ms'] <= 0:
-            actions = self._held['actions']
-            self._held = None
-            dispatch(actions)
-
-    def cancel(self):
-        """Drops a held press without dispatching it."""
-        self._held = None

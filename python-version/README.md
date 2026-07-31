@@ -60,11 +60,11 @@ path.
 No single panel press can quit, pause the cabinet permanently, or touch the
 leaderboard — the destructive things live behind the operator menu below.
 
-#### The operator menu (SELECT + START)
+#### The operator menu (SELECT)
 
 A cabinet has no keyboard, so clearing the leaderboard or shutting the game down
-used to mean SSHing into the Pi. Press **SELECT and START together on the main
-menu** and a short list appears:
+used to mean SSHing into the Pi. Press **SELECT on the main menu** and a short
+list appears:
 
 | Option | Effect |
 |---|---|
@@ -85,16 +85,21 @@ written until START is pressed on the confirm screen.
 
 Two details worth knowing if you change this:
 
-* The combo and the code are read as **physical panels**, not as the eight
+* The trigger and the code are read as **physical panels**, not as the eight
   actions the rest of the game uses. On the measured mat the shapes are already
   aliased to mute/pause/delete/select, so reading actions instead would toggle
   mute and pause the game while the code was being entered. The panel table is
   `panels` in `data/pad_mapping.json`, defaulting to the layout below.
-* START is bound to the `select` action, so on the menu it starts a game. To
-  stop that happening before the other half of the combo arrives, a press of
-  SELECT or START on the menu is held for 250ms before it is dispatched. This
-  applies **only on the menu and only to those two panels** — nothing in
-  gameplay is delayed, and the circle panel still starts a game instantly.
+* SELECT is free to take here because it drives the **`pause`** action, and
+  there is nothing to pause on the main menu. Everywhere else it still pauses.
+  Note this is *not* the `select` action — that one is driven by START and the
+  circle panel, and starts a game. The two vocabularies genuinely disagree about
+  the word, which is why panels exist at all.
+
+  An earlier version opened this with SELECT+START together. That needed both
+  panels' actions held back for 250ms to see whether a combo was forming, which
+  put a delay on starting a game and was too tight a window to hit reliably with
+  two feet on a mat. One panel needs none of that.
 
 Without a pad, **Ctrl-R** opens the same menu; inside it the arrow keys
 navigate, **X / S / T / C** stand in for the four shapes, **Enter** for

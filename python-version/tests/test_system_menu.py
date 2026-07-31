@@ -1,10 +1,12 @@
-"""The SELECT+START operator menu.
+"""The SELECT operator menu.
 
 Two things here can strand a cabinet with no keyboard attached, so both are
 pinned: the menu must always have a way out (every stage backs out to the game),
 and RESET SCORES must be unreachable without the full code in the right order.
-The combo watcher gets its own coverage because it deliberately *delays* a
-normal press, and a bug there would make the menu unstartable or the game so.
+
+The panel table gets its own coverage because the menu is driven by physical
+panels while the game is driven by actions, and the two disagree about what
+'select' means - see `test_panels_resolve_independently_of_actions`.
 """
 
 import pygame
@@ -14,7 +16,7 @@ from pacman.gamepad import DEFAULT_MAPPING, GamepadManager
 from pacman.leaderboard import Leaderboard
 from pacman.ui.system_menu import (
     CODE, DONE_MS, IDLE_TIMEOUT_MS, OPTIONS, STAGE_CODE, STAGE_CONFIRM,
-    STAGE_DONE, STAGE_OPTIONS, ComboWatcher, SystemMenu,
+    STAGE_DONE, STAGE_OPTIONS, SystemMenu,
 )
 
 pygame.init()
@@ -59,8 +61,9 @@ def enter_code(menu, panels=CODE):
 def test_panels_resolve_independently_of_actions():
     """The mat's SELECT panel drives the `pause` action, not `select`.
 
-    That divergence is the entire reason panels exist; if these ever collapse
-    into one lookup the combo starts firing on the wrong controls.
+    That divergence is the entire reason panels exist. It is also what makes the
+    SELECT panel free to open this menu: `pause` does nothing on the main menu,
+    whereas the `select` *action* - which START drives - starts a game.
     """
     pads = GamepadManager(DEFAULT_MAPPING)
 
@@ -101,88 +104,6 @@ def test_panels_refuse_axis_and_hat_bindings():
     assert pads.panels(event(pygame.JOYAXISMOTION, axis=0, value=1.0)) == ()
     assert pads.panels(event(pygame.JOYHATMOTION, hat=0, value=(1, 0))) == ()
     assert pads.panels(event(pygame.JOYBUTTONDOWN, button=7)) == ('circle',)
-
-
-# -- combo watcher -----------------------------------------------------------
-
-def test_combo_fires_when_both_panels_arrive_in_window():
-    fired = []
-    combo = ComboWatcher(on_trigger=lambda: fired.append(True))
-    dispatched = []
-
-    assert combo.feed(('select',), ('pause',)) is True
-    assert combo.feed(('start',), ('select',)) is True
-
-    combo.tick(1000, dispatched.append)
-    assert fired == [True]
-    # Neither half's normal action may leak through.
-    assert dispatched == []
-
-
-def test_combo_order_does_not_matter():
-    fired = []
-    combo = ComboWatcher(on_trigger=lambda: fired.append(True))
-    combo.feed(('start',), ('select',))
-    combo.feed(('select',), ('pause',))
-    assert fired == [True]
-
-
-def test_lone_press_is_dispatched_after_the_window():
-    """START on its own still starts a game - just `window_ms` later."""
-    combo = ComboWatcher(on_trigger=lambda: pytest.fail('should not fire'))
-    dispatched = []
-
-    combo.feed(('start',), ('select',))
-    combo.tick(100, dispatched.append)
-    assert dispatched == []          # still inside the window
-
-    combo.tick(200, dispatched.append)
-    assert dispatched == [('select',)]
-
-
-def test_second_press_after_the_window_is_not_a_combo():
-    fired = []
-    combo = ComboWatcher(on_trigger=lambda: fired.append(True))
-    dispatched = []
-
-    combo.feed(('select',), ('pause',))
-    combo.tick(1000, dispatched.append)
-    combo.feed(('start',), ('select',))
-    combo.tick(1000, dispatched.append)
-
-    assert fired == []
-    assert dispatched == [('pause',), ('select',)]
-
-
-def test_mashing_one_panel_still_dispatches_once():
-    """Stomping START on a mat must not hold the window open forever."""
-    combo = ComboWatcher(on_trigger=lambda: pytest.fail('should not fire'))
-    dispatched = []
-
-    for _ in range(8):                   # 240ms of mashing, inside one window
-        combo.feed(('start',), ('select',))
-        combo.tick(30, dispatched.append)
-    assert dispatched == []
-
-    # The window still expires on schedule, and the repeats collapse into one
-    # start rather than eight.
-    combo.tick(100, dispatched.append)
-    assert dispatched == [('select',)]
-
-
-def test_non_combo_panels_are_left_alone():
-    """The circle panel is bound to `select` too, and must stay instant."""
-    combo = ComboWatcher(on_trigger=lambda: pytest.fail('should not fire'))
-    assert combo.feed(('circle',), ('select',)) is False
-
-
-def test_cancel_drops_a_held_press():
-    combo = ComboWatcher(on_trigger=lambda: None)
-    dispatched = []
-    combo.feed(('start',), ('select',))
-    combo.cancel()
-    combo.tick(1000, dispatched.append)
-    assert dispatched == []
 
 
 # -- option list -------------------------------------------------------------

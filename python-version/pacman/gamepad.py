@@ -16,7 +16,7 @@ Bindings resolve to the same small set of actions the keyboard already drives
 a pad exists. Quit is deliberately *not* in that set - no single panel press may
 close the game (README "Dance pad / gamepad / arcade encoder"). A pad can still
 reach EXIT GAME, but only through the operator menu in `ui/system_menu.py`,
-which takes a two-panel combo to open and a menu selection to act on.
+which opens on SELECT from the main menu and needs a selection to act on.
 
 That menu also needs to know which *panel* was pressed rather than what it
 does, so alongside `bindings` there is a `panels` table. See `PANELS`.
@@ -31,12 +31,15 @@ ACTIONS = (
     'up', 'down', 'left', 'right', 'select', 'delete', 'pause', 'mute',
 )
 
-# Physical panels, kept in a namespace of their own because a combo has to know
-# *which control* was pressed, not what it does. The two are not
+# Physical panels, kept in a namespace of their own because the operator menu
+# has to know *which control* was pressed, not what it does. The two are not
 # interchangeable: on this mat the panel labelled SELECT drives the `pause`
 # action, and the `select` action is driven by START and the circle panel. So
-# `PANELS`'s 'select' and `ACTIONS`'s 'select' are different things - the score
-# menu combo (`ui/system_menu.py`) needs the panel, the game wants the action.
+# `PANELS`'s 'select' and `ACTIONS`'s 'select' are different things - the
+# operator menu (`ui/system_menu.py`) needs the panel, the game wants the
+# action. That divergence is also what makes the SELECT *panel* free to open
+# that menu: `pause` does nothing on the main menu, while the `select` *action*
+# starts a game.
 PANELS = ('select', 'start', 'cross', 'square', 'triangle', 'circle')
 
 MAPPING_FILE = os.path.join(

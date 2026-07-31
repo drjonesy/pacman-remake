@@ -108,7 +108,7 @@ def main(argv=None):
     from pacman.ui.hud import Hud
     from pacman.ui.menu import Menu
     from pacman.ui.score_entry import ScoreEntry
-    from pacman.ui.system_menu import ComboWatcher, SystemMenu
+    from pacman.ui.system_menu import SystemMenu
 
     assets = AssetStore().load()
     renderer = Renderer(logical, assets)
@@ -187,8 +187,6 @@ def main(argv=None):
     def open_system_menu():
         system_menu.open_menu(on_reset=on_score_saved, on_exit=quit_game)
 
-    combo = ComboWatcher(on_trigger=open_system_menu)
-
     def system_menu_armed():
         # Menu screen only. Note the state is already STATE_MENU while the
         # name-entry modal is still up after a game over, so that has to be
@@ -222,7 +220,11 @@ def main(argv=None):
 
         if system_menu.open:
             system_menu.feed(panels=panels, actions=actions)
-        elif not (system_menu_armed() and combo.feed(panels, actions)):
+        elif system_menu_armed() and 'select' in panels:
+            # Free to take: the SELECT panel drives `pause`, and there is
+            # nothing to pause on the menu. Everywhere else it still does.
+            open_system_menu()
+        else:
             dispatch(actions)
 
     # Desktop stand-ins for the mat, so the operator menu can be exercised with
@@ -270,7 +272,8 @@ def main(argv=None):
         pad_bound = pads.key_actions(event)
         pad_panels = pads.key_panels(event)
         if pad_bound or pad_panels:
-            if system_menu_armed() and combo.feed(pad_panels, pad_bound):
+            if system_menu_armed() and 'select' in pad_panels:
+                open_system_menu()
                 return
             if pad_bound:
                 dispatch(pad_bound)
@@ -302,7 +305,7 @@ def main(argv=None):
         elif event.key == pygame.K_F1:
             coordinator.show_fps = not coordinator.show_fps
         elif event.key == pygame.K_r and event.mod & pygame.KMOD_CTRL:
-            # Desktop stand-in for SELECT+START on the mat.
+            # Desktop stand-in for the SELECT panel on the mat.
             if system_menu_armed():
                 open_system_menu()
 
@@ -351,15 +354,10 @@ def main(argv=None):
         state['ui_clock_ms'] += frame_ms
         coordinator.tick_realtime(frame_ms)
 
-        # Both run on wall-clock time: the game is not simulating while either
-        # the operator menu is up or a combo press is being held.
+        # Wall-clock, not simulation time: the game is not simulating behind the
+        # operator menu, so its idle timeout cannot be driven from the engine.
         if system_menu.open:
             system_menu.tick(frame_ms)
-            combo.cancel()
-        elif system_menu_armed():
-            combo.tick(frame_ms, dispatch)
-        else:
-            combo.cancel()
 
         if coordinator.state == STATE_PLAYING and coordinator.running:
             engine.tick(frame_ms)
