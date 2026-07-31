@@ -329,6 +329,52 @@ The 37-tile height is the *whole* UI column — score row (3), gap (1), maze (31
 lives/fruit row (2). Budgeting only the maze picks a scale ~18% too large and
 clips the score and lives rows, which is a bug the reference had and fixed.
 
+## Sound
+
+The game prints its audio state at startup, and `run-game.sh` tees that to
+`run-game.log`, so a silent cabinet leaves evidence:
+
+```
+audio: driver=alsa mixer=(44100, -16, 2)
+audio: 14 clips loaded, volume=1
+```
+
+Read it in that order — each line rules something out:
+
+| What you see | What it means |
+|---|---|
+| `audio: OFF (...)` | The mixer never opened. The reason is in the brackets. |
+| `0 clips loaded` | The mixer opened but no audio decoded — check `assets/audio/`. |
+| `volume=0` | **The game is muted.** Q, or the square panel, toggles it. |
+| Looks correct, still silent | Routing. SDL is playing to a device that is not the TV. |
+
+That last case is the common one on a Pi. SDL picks its own audio driver, and it
+need not be the one the desktop uses: with system audio going out over HDMI
+through PipeWire, SDL can still choose raw ALSA — and raw ALSA is the headphone
+jack. Nothing errors; the sound just arrives at the wrong socket.
+
+To find a driver that reaches the TV:
+
+```bash
+python tools/audio_check.py
+```
+
+It walks every driver SDL was built with, reports which open and what devices
+they see, and plays a real clip through each so you can hear which one comes out
+of the TV. Then launch with whichever worked:
+
+```bash
+./run-game.sh --audio-driver pulseaudio
+```
+
+To make it stick, add that flag to the `Exec=` line in `~/Desktop/pacman.desktop`
+(and in `~/.local/share/applications/pacman.desktop`), or export
+`SDL_AUDIODRIVER` near the top of `run-game.sh`. `--audio-device` forces a
+specific output by name if a driver sees several.
+
+If **no** driver produces sound, the game is not the problem — check the desktop
+mixer's output device, and `wpctl status` on Bookworm.
+
 ## Assets
 
 `assets/` is generated and committed. The Pi loads PNG and OGG only — it needs

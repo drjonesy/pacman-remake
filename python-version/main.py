@@ -5,6 +5,7 @@ Run with no arguments for fullscreen. `--windowed` is for desktop testing.
 """
 
 import argparse
+import os
 import sys
 
 from pacman import constants as C
@@ -34,6 +35,13 @@ def parse_args(argv=None):
                              '(equivalent to npm run reset)')
     parser.add_argument('--audio-buffer', type=int, default=AUDIO_BUFFER,
                         metavar='N', help='mixer buffer size (default: 512)')
+    parser.add_argument('--audio-driver', default=None, metavar='NAME',
+                        help='force an SDL audio driver (pulseaudio, pipewire, '
+                             'alsa...). Default: let SDL choose. Run '
+                             'tools/audio_check.py to find one that works.')
+    parser.add_argument('--audio-device', default=None, metavar='NAME',
+                        help='force a specific output device by name, e.g. an '
+                             'HDMI sink. Listed by tools/audio_check.py.')
     parser.add_argument('--pad-mapping', default=None, metavar='PATH',
                         help='gamepad / dance-pad binding table '
                              '(default: data/pad_mapping.json, written by '
@@ -52,26 +60,53 @@ def main(argv=None):
         print(f'leaderboard cleared: {leaderboard.data_file}')
         return 0
 
+    # Must be set before pygame is imported: SDL reads it when it
+    # initialises. On a Pi whose system audio goes to HDMI via PipeWire, SDL
+    # may still pick raw ALSA - and raw ALSA is the headphone jack.
+    if args.audio_driver:
+        os.environ['SDL_AUDIODRIVER'] = args.audio_driver
+
     import pygame
 
     sound_enabled = not args.no_sound
+    audio_error = None
+
     if sound_enabled:
         try:
             pygame.mixer.pre_init(
                 frequency=44100, size=-16, channels=2,
                 buffer=args.audio_buffer,
             )
-        except pygame.error:
+        except pygame.error as error:
+            audio_error = error
             sound_enabled = False
 
     pygame.init()
     if sound_enabled and not pygame.mixer.get_init():
         try:
-            pygame.mixer.init()
-        except pygame.error:
+            if args.audio_device:
+                pygame.mixer.init(devicename=args.audio_device)
+            else:
+                pygame.mixer.init()
+        except (pygame.error, TypeError) as error:
             # No audio device (headless, or a Pi with audio disabled) must not
-            # stop the game from running.
+            # stop the game from running. TypeError covers an older pygame
+            # without the `devicename` parameter.
+            audio_error = error
             sound_enabled = False
+
+    # Printed, not swallowed. Every audio failure here used to be silent, which
+    # left "no sound on the cabinet" with nothing to go on; run-game.sh tees
+    # this to run-game.log.
+    if not sound_enabled:
+        reason = audio_error or ('--no-sound' if args.no_sound else 'unknown')
+        print(f'audio: OFF ({reason})')
+    else:
+        try:
+            driver = pygame.mixer.get_driver()
+        except (AttributeError, pygame.error):
+            driver = 'unknown'
+        print(f'audio: driver={driver} mixer={pygame.mixer.get_init()}')
 
     pygame.display.set_caption('Pac-Man')
     pygame.mouse.set_visible(False)
@@ -116,6 +151,11 @@ def main(argv=None):
     font = BitmapFont()
 
     sound_manager = SoundManager(enabled=sound_enabled).load()
+    if sound_enabled:
+        # A clip that fails to decode is skipped silently by design, so the
+        # count is the only sign that the audio assets are actually usable.
+        print(f'audio: {len(sound_manager.sounds)} clips loaded, '
+              f'volume={sound_manager.master_volume}')
 
     coordinator = GameCoordinator(renderer, sound_manager, leaderboard)
     coordinator.show_fps = args.fps
