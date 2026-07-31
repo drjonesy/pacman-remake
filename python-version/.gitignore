@@ -12,3 +12,6 @@ data/settings.json.tmp
 # committing, so a re-clone onto the Pi does not mean stepping through it again.
 data/pad_mapping.json.tmp
 pad-report.txt
+
+# Console output from a desktop-launched run; regenerated every launch.
+run-game.log
