@@ -9,6 +9,7 @@ Everything is drawn in absolute screen coordinates, not maze coordinates.
 import pygame
 
 from .. import constants as C
+from ..controls import KEYBOARD, SCHEMES
 
 TILE = C.SCALED_TILE_SIZE
 
@@ -31,16 +32,30 @@ BOTTOM_ROW_Y = C.MAZE_ORIGIN_Y + C.MAZE_HEIGHT   # 280
 ICON_SIZE = TILE * 2                             # 16, engine.js:1878
 MAX_FRUIT_ICONS = 7                              # engine.js:1888
 
+# The pause/sound reminder sits in the last quarter of the score row, which the
+# reference left empty (the 25% and 50% columns above only reach x=168). The
+# bottom row was the other candidate and does not work: with a full complement
+# of lives on the left and seven fruit on the right, the gap between them
+# narrows to about 48px - too little for the longer dance-mat labels.
+HINT_RIGHT = C.LOGICAL_WIDTH - 2
+
 
 class Hud:
-    def __init__(self, renderer, font):
+    def __init__(self, renderer, font, controls=None):
         self.renderer = renderer
         self.font = font
+        # By reference - see the note in `ui/menu.py`.
+        self.controls = controls
+
+    @property
+    def scheme(self):
+        return self.controls.scheme if self.controls else SCHEMES[KEYBOARD]
 
     def draw(self, coordinator, fps):
         """Draws the chrome around the board."""
         self.draw_score_row(coordinator)
         self.draw_bottom_row(coordinator)
+        self.draw_control_hint(coordinator)
 
         # The reference showed a volume_up / volume_off icon in its header
         # (engine.js:1342). There is no header here, so muting gets a small
@@ -88,6 +103,24 @@ class Hud:
             x = C.LOGICAL_WIDTH - (len(icons) - index) * ICON_SIZE
             self.renderer.draw_image_at(key, x, BOTTOM_ROW_Y, ICON_SIZE, ICON_SIZE)
 
+    def draw_control_hint(self, coordinator):
+        """Names the pause and sound controls, so neither has to be memorised.
+
+        Kept grey rather than white so it reads as chrome and does not compete
+        with the score. Suppressed while the FPS counter is on: that is a
+        developer toggle and it occupies the same corner.
+        """
+        if coordinator.show_fps:
+            return
+
+        surface = self.renderer.surface
+        scheme = self.scheme
+
+        self.font.draw(surface, f'{scheme.pause} PAUSE', HINT_RIGHT,
+                       LINE_ONE_Y, C.ARCADE_GREY, align='right')
+        self.font.draw(surface, f'{scheme.sound} SOUND', HINT_RIGHT,
+                       LINE_TWO_Y, C.ARCADE_GREY, align='right')
+
     def draw_fps(self, fps):
         """The debug FPS counter (engine.js:2550) - kept, per §11, as a toggle."""
         self.font.draw(
@@ -112,4 +145,12 @@ class Hud:
         self.font.draw(
             surface, 'PAUSED', width / 2, height / 2 - 7, C.WHITE,
             scale=2, align='center',
+        )
+
+        # The score row's hint is blurred out along with the board, and a
+        # stopped player is the one most likely to be looking for the control.
+        scheme = self.scheme
+        self.font.draw(
+            surface, f'{scheme.pause} RESUMES   {scheme.sound} SOUND',
+            width / 2, height / 2 + 14, C.ARCADE_GREY, align='center',
         )

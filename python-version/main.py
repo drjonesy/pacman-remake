@@ -124,7 +124,7 @@ def main(argv=None):
     # screen picks up a change of scheme on the next frame.
     controls = Controls()
 
-    hud = Hud(renderer, font)
+    hud = Hud(renderer, font, controls)
     menu = Menu(renderer, font, leaderboard, controls)
     score_entry = ScoreEntry(renderer, font, leaderboard, controls)
     system_menu = SystemMenu(renderer, font, leaderboard, controls=controls)

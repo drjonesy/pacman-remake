@@ -50,6 +50,12 @@ The only runtime dependency is `pygame-ce`. There is no Node, npm, pnpm, or
 Turn buffering is preserved: a direction pressed slightly *before* a junction
 still registers when you reach it. It is a large part of how the controls feel.
 
+The pause and sound controls are named on screen **during play** — in the last
+quarter of the score row, and again on the pause overlay — so nothing has to be
+memorised from the title screen. The FPS counter (**F1**) shares that corner and
+takes it when enabled. Which controls are named depends on the selected
+controller scheme; see the operator menu below.
+
 ### Dance pad / gamepad / arcade encoder
 
 A USB pad is picked up automatically, including one plugged in *after* launch.
@@ -87,6 +93,8 @@ they become the panel names instead:
 |---|---|---|
 | Main menu button | PRESS ENTER | PRESS START |
 | Main menu hint | ESC PAUSE   Q SOUND | SELECT PAUSE   SQUARE SOUND |
+| **In game** (score row) | ESC PAUSE / Q SOUND | SELECT PAUSE / SQUARE SOUND |
+| **Pause overlay** | ESC RESUMES   Q SOUND | SELECT RESUMES   SQUARE SOUND |
 | Name entry | ARROWS MOVE  ENTER PICK | ARROWS MOVE  START PICK |
 | This menu | ENTER PICKS / ESC CANCELS | SELECT PICKS / SELECT CANCELS |
 
