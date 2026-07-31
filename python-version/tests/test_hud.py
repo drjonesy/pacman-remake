@@ -105,12 +105,19 @@ def test_pause_and_sound_are_named_during_play(hud_for):
 
 
 def test_the_hint_follows_the_pad_scheme(hud_for):
+    """The speaker survives as a state light, but names no control.
+
+    The mat has no sound control since the square panel was unbound - that moved
+    to the operator menu - so there is nothing to bracket. Whether sound is on
+    still has to be visible, which is the speaker's other job.
+    """
     hud, font = hud_for(PAD)
     hud.draw(StubCoordinator(), 60.0)
 
-    assert f'PAUSE = [SELECT]   {SPEAKER} = [□]' in font.texts
+    assert f'PAUSE = [SELECT]   {SPEAKER}' in font.texts
     assert not any('ESC' in text for text in font.texts)
-    # The panel is drawn, never spelled.
+    # No control is named for it - not the panel, not the word, not the shape.
+    assert not any('= [□]' in text for text in font.texts)
     assert not any('SQUARE' in text for text in font.texts)
 
 
@@ -178,6 +185,13 @@ def test_unmuted_draws_no_slash(hud_for):
     hud.draw(StubCoordinator(muted=False), 60.0)
 
     assert slash_pixels(hud.renderer.surface) == 0
+
+
+def test_the_pad_speaker_names_no_control():
+    """A bare glyph, not `🔈 = [□]` - the panel it used to name does nothing."""
+    assert sound_hint(SCHEMES[PAD]) == SPEAKER
+    assert SPEAKER in control_hints(SCHEMES[PAD])
+    assert '[' not in sound_hint(SCHEMES[PAD])
 
 
 @pytest.mark.parametrize('name', [KEYBOARD, PAD])

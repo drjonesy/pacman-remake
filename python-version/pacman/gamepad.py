@@ -67,6 +67,11 @@ DEFAULT_DEADZONE = 0.5
 # That arrow order is not arbitrary: on a PlayStation dance mat the arrows *are*
 # the face buttons, and the corner shape panels get the shoulder indices.
 #
+# Nothing that acts *during play* is bound to a shape panel, because those four
+# are the mat's corners and a foot travelling between arrows clips them. They
+# are still read as `panels` for the operator menu's passcode, which is only
+# reachable from the main menu - see `PANELS` and `ui/system_menu.py`.
+#
 # Hat bindings are kept alongside so an ordinary gamepad or arcade encoder still
 # works out of the box. Axis bindings are deliberately absent: this board parks
 # its unused analogue axes at full deflection often enough that binding a
@@ -100,13 +105,24 @@ DEFAULT_MAPPING = {
         'delete': [
             {'type': 'button', 'button': 6},   # cross panel
         ],
+        # SELECT only. The triangle panel used to be a second pause binding,
+        # carried over from the gamepad layout this table started as - but on a
+        # mat the shape panels are *corners*, sharing an edge with the arrows a
+        # player's feet are already moving between. Clipping the corner of
+        # triangle on the way to left or down paused the game mid-run, which
+        # read as random because two things hide the cause: `allow_pause` is
+        # false through the READY! text so an early clip does nothing, and the
+        # in-game hint only ever named SELECT. SELECT is a mat edge panel, so it
+        # takes a deliberate step.
         'pause': [
             {'type': 'button', 'button': 8},   # SELECT
-            {'type': 'button', 'button': 5},   # triangle panel
         ],
-        'mute': [
-            {'type': 'button', 'button': 4},   # square panel
-        ],
+        # Empty for the same reason: the square panel is the corner between the
+        # left and down arrows, and clipping it silently toggled the sound. The
+        # keyboard's Q still mutes - it is wired directly in `main.py`, not
+        # through this table - so a desk setup is unaffected. A mat that wants
+        # the panel back can say so in `data/pad_mapping.json`.
+        'mute': [],
     },
     # Physical panels, straight off the layout comment above. Only buttons and
     # keys are honoured here - a combo entered on an analogue axis would be at

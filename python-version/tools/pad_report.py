@@ -45,8 +45,12 @@ PANELS = (
     ('SELECT',   'the SELECT panel',         'pause'),
     ('CROSS',    'the X panel',              'delete'),
     ('CIRCLE',   'the O panel',              'select'),
-    ('SQUARE',   'the SQUARE panel',         'mute'),
-    ('TRIANGLE', 'the TRIANGLE panel',       'pause'),
+    # Walked and recorded like any other panel, but bound to nothing: on a mat
+    # the shapes are the corners, and a foot moving between two arrows clips the
+    # corner between them. SQUARE was `mute` and TRIANGLE was a second `pause`
+    # until that turned out to be what kept interrupting a run.
+    ('SQUARE',   'the SQUARE panel',         None),
+    ('TRIANGLE', 'the TRIANGLE panel',       None),
     # Recorded, never bound. On a mat the centre is where the player stands
     # between moves, so a sensor there fires constantly during normal play -
     # binding it to anything would mean pausing or muting every few seconds.

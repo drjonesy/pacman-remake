@@ -167,7 +167,8 @@ def main(argv=None):
     hud = Hud(renderer, font, controls)
     menu = Menu(renderer, font, leaderboard, controls, sound_manager)
     score_entry = ScoreEntry(renderer, font, leaderboard, controls)
-    system_menu = SystemMenu(renderer, font, leaderboard, controls=controls)
+    system_menu = SystemMenu(renderer, font, leaderboard, controls=controls,
+                             sound_manager=sound_manager)
 
     def on_score_saved():
         # The HIGH SCORE readout mirrors first place, so both it and the menu

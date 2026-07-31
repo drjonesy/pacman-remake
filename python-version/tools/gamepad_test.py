@@ -45,7 +45,10 @@ PROMPTS = (
     ('select', 'START  (starts a game, confirms a letter)'),
     ('delete', 'X      (deletes a letter during name entry)'),
     ('pause', 'SELECT (pauses during play)'),
-    ('mute', 'SQUARE (toggles sound)'),
+    # Skip this one on a dance mat. There is no panel left that is safe to put
+    # it on: the shapes are corners a moving foot clips, and the arrows are the
+    # controls. It was on SQUARE until that turned out to mute mid-run.
+    ('mute', 'SQUARE (toggles sound) - SKIP THIS ON A DANCE MAT'),
 )
 
 # A mat's panel can bounce, and many report one press on both a hat and an

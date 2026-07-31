@@ -41,10 +41,6 @@
       {
         "type": "button",
         "button": 8
-      },
-      {
-        "type": "button",
-        "button": 5
       }
     ],
     "delete": [
@@ -53,11 +49,6 @@
         "button": 6
       }
     ],
-    "mute": [
-      {
-        "type": "button",
-        "button": 4
-      }
-    ]
+    "mute": []
   }
 }

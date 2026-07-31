@@ -50,25 +50,52 @@ def controls(tmp_path):
     return Controls(name=KEYBOARD, path=str(tmp_path / 'settings.json'))
 
 
+class StubSound:
+    """Just the surface `SystemMenu` touches, and a call count.
+
+    The real `SoundManager.toggle_mute` also writes `data/settings.json`, which
+    these tests must not go near.
+    """
+
+    def __init__(self, master_volume=1):
+        self.master_volume = master_volume
+        self.toggle_calls = 0
+
+    def toggle_mute(self):
+        self.toggle_calls += 1
+        self.master_volume = 0 if self.master_volume == 1 else 1
+        return self.master_volume
+
+
 @pytest.fixture
-def menu(board, controls):
+def sound():
+    return StubSound()
+
+
+@pytest.fixture
+def menu(board, controls, sound):
     # renderer and font are only touched by draw(), which is not under test.
-    return SystemMenu(None, None, board, controls=controls)
+    return SystemMenu(None, None, board, controls=controls, sound_manager=sound)
 
 
 def open_reset(menu):
     """Open the menu and step into the reset gate.
 
-    RESET SCORES is not the first row - CONTROLLER leads the list - so this
-    cannot just select whatever the cursor starts on.
+    RESET SCORES is not the first row - SOUND leads the list - so this cannot
+    just select whatever the cursor starts on.
     """
     menu.open_menu()
-    menu.index = option_index('reset')
+    menu.index = option_index(menu, 'reset')
     menu.feed(panels=('select',))
 
 
-def option_index(name):
-    return [key for key, _ in OPTIONS].index(name)
+def option_index(menu, name):
+    """Read off the *menu's* rows, not the module's.
+
+    They differ: `OPTIONS` is the full list, while `menu.options` drops SOUND
+    when there is no sound manager to toggle.
+    """
+    return [key for key, _ in menu.options].index(name)
 
 
 def enter_code(menu, panels=DEFAULT_CODE):
@@ -148,7 +175,7 @@ def test_arrows_navigate_and_wrap(menu):
 def test_exit_option_calls_the_exit_hook(menu):
     exits = []
     menu.open_menu(on_exit=lambda: exits.append(True))
-    menu.index = option_index('exit')
+    menu.index = option_index(menu, 'exit')
     menu.feed(panels=('select',))
 
     assert exits == [True]
@@ -158,7 +185,7 @@ def test_exit_option_calls_the_exit_hook(menu):
 def test_cancel_option_closes_without_side_effects(menu, board):
     exits = []
     menu.open_menu(on_exit=lambda: exits.append(True))
-    menu.index = option_index('cancel')
+    menu.index = option_index(menu, 'cancel')
     menu.feed(panels=('select',))
 
     assert not menu.open
@@ -170,18 +197,113 @@ def test_start_panel_does_not_pick_an_option(menu):
     """Only SELECT picks. START is the confirm for the reset gate."""
     exits = []
     menu.open_menu(on_exit=lambda: exits.append(True))
-    menu.index = option_index('exit')
+    menu.index = option_index(menu, 'exit')
     menu.feed(panels=('start',))
 
     assert menu.open
     assert exits == []
 
 
+# -- sound -------------------------------------------------------------------
+#
+# The mat has no sound panel: the square panel used to mute, but it is a corner
+# a moving foot clips, so it was unbound. This row is where that control went.
+
+def test_sound_leads_the_list(menu):
+    """The cursor starts on the only row that is harmless *and* routine."""
+    assert option_index(menu, 'sound') == 0
+
+
+def test_the_sound_row_reads_its_own_state(menu, sound):
+    menu.open_menu()
+    assert menu.option_label('sound', 'SOUND') == 'SOUND  ON'
+
+    sound.master_volume = 0
+    assert menu.option_label('sound', 'SOUND') == 'SOUND  OFF'
+
+
+def test_choosing_sound_toggles_and_stays_open(menu, sound):
+    """Unlike every other row. The label flipping under the cursor is the
+    confirmation, and staying put is the way back from a mis-step."""
+    menu.open_menu()
+    menu.feed(panels=('select',))
+
+    assert sound.toggle_calls == 1
+    assert sound.master_volume == 0
+    assert menu.open
+    assert menu.stage == STAGE_OPTIONS
+    assert menu.index == option_index(menu, 'sound')
+
+
+def test_sound_toggles_back(menu, sound):
+    menu.open_menu()
+    menu.feed(panels=('select',))
+    menu.feed(panels=('select',))
+
+    assert sound.toggle_calls == 2
+    assert sound.master_volume == 1
+
+
+def test_toggling_sound_resets_the_idle_timeout(menu):
+    """Otherwise a slow operator gets the menu shut on them mid-adjustment."""
+    menu.open_menu()
+    menu.tick(IDLE_TIMEOUT_MS - 1)
+    menu.feed(panels=('select',))
+    assert menu.idle_ms == 0
+
+    menu.tick(IDLE_TIMEOUT_MS - 1)
+    assert menu.open
+
+
+def test_the_row_is_dropped_when_there_is_no_sound_manager(board, controls):
+    """A dead row would be worse than a missing one - every row must do
+    something. The rest of the list has to stay reachable without it."""
+    menu = SystemMenu(None, None, board, controls=controls)
+
+    keys = [key for key, _ in menu.options]
+    assert 'sound' not in keys
+    assert keys == [key for key, _ in OPTIONS if key != 'sound']
+
+    exits = []
+    menu.open_menu(on_exit=lambda: exits.append(True))
+    menu.index = option_index(menu, 'exit')
+    menu.feed(panels=('select',))
+    assert exits == [True]
+
+
+def test_the_rows_still_fit_above_the_nav_hint():
+    """Adding SOUND made this a five-row list. Pure geometry, so it needs no
+    renderer - and it is the kind of thing that only shows up on the cabinet."""
+    from pacman.font import BitmapFont
+    from pacman.ui.system_menu import (
+        HINT_Y, OPTIONS_Y, PANEL_GAP, PANEL_HEIGHT, PANEL_WIDTH,
+    )
+
+    bottom = OPTIONS_Y + (len(OPTIONS) - 1) * (PANEL_HEIGHT + PANEL_GAP)
+    assert bottom + PANEL_HEIGHT <= HINT_Y, 'the last row overlaps the hint'
+
+    font = BitmapFont()
+    labels = [label for _, label in OPTIONS] + ['SOUND  ON', 'SOUND  OFF']
+    for label in labels:
+        assert font.measure(label)[0] <= PANEL_WIDTH, f'{label} overflows'
+
+
+def test_navigation_wraps_over_the_menus_own_rows(board, controls):
+    """`menu.options` is what wraps, not the module-level `OPTIONS` - those
+    differ in length whenever the sound row is absent."""
+    menu = SystemMenu(None, None, board, controls=controls)
+    menu.open_menu()
+    menu.feed(actions=('up',))
+
+    assert menu.index == len(menu.options) - 1
+    assert menu.options[menu.index][0] == 'cancel'
+
+
 # -- controller picker -------------------------------------------------------
 
 def open_controls(menu):
     menu.open_menu()
-    menu.index = option_index('controls')
+    menu.index = option_index(menu, 'controls')
     menu.feed(panels=('select',))
 
 
@@ -240,7 +362,7 @@ def test_labels_differ_between_the_two_schemes():
 def test_full_code_then_start_clears_the_board(menu, board):
     resets = []
     menu.open_menu(on_reset=lambda: resets.append(True))
-    menu.index = option_index('reset')
+    menu.index = option_index(menu, 'reset')
     menu.feed(panels=('select',))
     assert menu.stage == STAGE_CODE
 

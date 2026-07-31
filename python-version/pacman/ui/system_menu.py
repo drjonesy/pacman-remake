@@ -1,9 +1,9 @@
 """The SELECT operator menu (Pi-only; no reference counterpart).
 
-A cabinet has no keyboard, so clearing the leaderboard or shutting the game down
-used to mean SSHing in. This is that: the SELECT panel on the main menu opens a
-short list - RESET SCORES, EXIT GAME, CANCEL - navigated with the arrow panels
-and chosen with SELECT.
+A cabinet has no keyboard, so clearing the leaderboard, turning the sound off or
+shutting the game down used to mean SSHing in. This is that: the SELECT panel on
+the main menu opens a short list - SOUND, CONTROLLER, RESET SCORES, EXIT GAME,
+CANCEL - navigated with the arrow panels and chosen with SELECT.
 
 SELECT is free to take on the menu because it drives the `pause` action, and
 there is nothing to pause there. An earlier version needed SELECT+START
@@ -30,6 +30,10 @@ the shapes are already aliased to mute/pause/delete/select, so reading actions
 instead would toggle mute and pause the game while the code was being entered.
 
 `main.py` only offers this on the menu screen, so it can never interrupt a run.
+That is also why SOUND lives here rather than on a panel: the mat's square panel
+used to mute, but it is a corner that a foot moving between the arrows clips, so
+it was unbound. A row in a menu you can only reach while standing still cannot
+be hit by accident.
 """
 
 import json
@@ -87,16 +91,24 @@ def load_code(path=PASSCODE_FILE):
     return tuple(code)
 
 
+OPTION_SOUND = 'sound'
 OPTION_CONTROLS = 'controls'
 OPTION_RESET = 'reset'
 OPTION_EXIT = 'exit'
 OPTION_CANCEL = 'cancel'
 
 # CANCEL is not in the original sketch of this menu, but without it the popup is
-# a trap: every other row either wipes the board or kills the game. CONTROLLER
-# leads the list because it is the only harmless one, and the cursor starts on
-# whatever is first.
+# a trap: every other row either wipes the board or kills the game.
+#
+# SOUND leads the list. It is the only row anyone touches routinely, it is the
+# most harmless - one more press puts it back - and the cursor starts on
+# whatever is first. It is here at all because the mat has no sound panel: the
+# square panel used to mute, but it is a corner a moving foot clips, so it was
+# unbound (see `gamepad.DEFAULT_MAPPING`). This popup is the replacement, and it
+# is a good home for it - reachable from the mat with no keyboard, and only from
+# the main menu, so it can never fire mid-run.
 OPTIONS = (
+    (OPTION_SOUND, 'SOUND'),
     (OPTION_CONTROLS, 'CONTROLLER'),
     (OPTION_RESET, 'RESET SCORES'),
     (OPTION_EXIT, 'EXIT GAME'),
@@ -138,14 +150,23 @@ class SystemMenu:
     the game, so nothing behind it can be reached by the code being entered.
     """
 
-    def __init__(self, renderer, font, leaderboard, code=None, controls=None):
+    def __init__(self, renderer, font, leaderboard, code=None, controls=None,
+                 sound_manager=None):
         self.renderer = renderer
         self.font = font
         self.leaderboard = leaderboard
         self.controls = controls if controls is not None else Controls()
+        self.sound_manager = sound_manager
         # Read once at construction: re-reading per press would put a file stat
         # in the input path for no benefit, and the file is not hot-edited.
         self.code = tuple(code) if code else load_code()
+
+        # The SOUND row is dropped when there is nothing to toggle rather than
+        # left in place as a dead entry, so every row on screen does something.
+        self.options = tuple(
+            option for option in OPTIONS
+            if option[0] != OPTION_SOUND or sound_manager is not None
+        )
 
         self.open = False
         self.stage = STAGE_OPTIONS
@@ -217,9 +238,9 @@ class SystemMenu:
 
         if self.stage == STAGE_OPTIONS:
             if 'up' in actions:
-                self.index = (self.index - 1) % len(OPTIONS)
+                self.index = (self.index - 1) % len(self.options)
             elif 'down' in actions:
-                self.index = (self.index + 1) % len(OPTIONS)
+                self.index = (self.index + 1) % len(self.options)
             elif 'select' in panels:
                 self._choose()
             return
@@ -257,9 +278,31 @@ class SystemMenu:
                     self.stage = STAGE_CONFIRM
                 return
 
+    @property
+    def muted(self):
+        return (self.sound_manager is not None
+                and self.sound_manager.master_volume == 0)
+
+    def option_label(self, key, label):
+        """The row's text. SOUND carries its own state, the rest are static.
+
+        The label *is* the readout - `SOUND  ON` / `SOUND  OFF` - which is the
+        same trick the in-game speaker glyph uses. There is no separate
+        indicator to keep in step with it, and no sub-list to step into.
+        """
+        if key != OPTION_SOUND:
+            return label
+        return f'{label}  {"OFF" if self.muted else "ON"}'
+
     def _choose(self):
-        option = OPTIONS[self.index][0]
-        if option == OPTION_CANCEL:
+        option = self.options[self.index][0]
+        if option == OPTION_SOUND:
+            # Stays open, unlike every other row: the label flips under the
+            # cursor, which is both the confirmation and the way back if a foot
+            # landed on the wrong panel. `toggle_mute` persists it to
+            # `data/settings.json`, so it survives a restart.
+            self.sound_manager.toggle_mute()
+        elif option == OPTION_CANCEL:
             self.close()
         elif option == OPTION_EXIT:
             self.close()
@@ -353,7 +396,9 @@ class SystemMenu:
     def _draw_options(self, surface):
         self.font.draw(surface, 'SYSTEM MENU', C.LOGICAL_WIDTH / 2, HEADING_Y,
                        C.ARCADE_YELLOW, align='center')
-        self._draw_rows(surface, [label for _, label in OPTIONS])
+        self._draw_rows(surface, [
+            self.option_label(key, label) for key, label in self.options
+        ])
         self._draw_nav_hint(surface)
 
     def _draw_controls(self, surface):

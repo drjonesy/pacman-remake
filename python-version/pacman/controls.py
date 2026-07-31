@@ -33,6 +33,9 @@ class ControlScheme:
         self.label = label          # how the operator menu lists it
         self.start = start          # main menu: PRESS <start>
         self.pause = pause          # main menu hint: <pause> PAUSE
+        # Both None on a scheme with no sound control, which is what the pad is
+        # since the square panel was unbound. Callers must handle that rather
+        # than print an empty pair of brackets.
         self.sound = sound          # main menu hint: <sound> SOUND
         # The same control as `sound`, drawn rather than spelled, for the
         # in-game hint where there is no room for a word. A key keeps its
@@ -56,7 +59,13 @@ SCHEMES = {
         key=PAD, label='DDR PAD',
         # START and the circle panel both drive `select`; START is the one
         # printed on the mat, so that is what the hint says.
-        start='START', pause='SELECT', sound='SQUARE', sound_icon='□',
+        #
+        # `sound` is None because the mat has no sound *control* any more: the
+        # square panel used to mute, but it is a corner panel and feet moving
+        # between the arrows kept clipping it, so sound moved into the operator
+        # menu. The hint drops the bracketed control and keeps the speaker as a
+        # bare state indicator - see `ui/hints.sound_hint`.
+        start='START', pause='SELECT', sound=None, sound_icon=None,
         move='ARROWS', pick='START',
         menu_pick='SELECT', cancel='SELECT', confirm='START',
     ),

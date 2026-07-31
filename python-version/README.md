@@ -55,7 +55,7 @@ between the score row and the maze, and again on the pause overlay — so nothin
 has to be memorised from the title screen:
 
 ```
-PAUSE = [SELECT]   🔈 = [□]
+PAUSE = [ESC]   🔈 = [Q]
 ```
 
 The control is bracketed, and drawn rather than named wherever the mat has a
@@ -64,24 +64,34 @@ and the state, **struck through in red when sound is off**, which is the game's
 only visible report of mute. Which controls are named depends on the selected
 controller scheme; see the operator menu below.
 
+Under the pad scheme the line is `PAUSE = [SELECT]   🔈`. The mat has no sound
+control to name — see [the shape panels](#the-shape-panels-do-nothing-during-play)
+— so the speaker loses its bracket and stays on as a pure status light, still
+struck through when muted. Audio is switched from
+[the operator menu](#sound--audio-on-and-off) under that scheme.
+
 ### Dance pad / gamepad / arcade encoder
 
 A USB pad is picked up automatically, including one plugged in *after* launch.
 Everything it can do is expressed as **direction + select + delete + pause +
 mute**, so a DDR mat, a gamepad and an arcade encoder all use the same code
-path.
+path. `mute` is left unbound on the measured mat — see [the shape
+panels](#the-shape-panels-do-nothing-during-play); it lives in
+[the operator menu](#sound--audio-on-and-off) instead — but a gamepad, which has
+thumb buttons rather than panels underfoot, can safely bind it.
 
 No single panel press can quit, pause the cabinet permanently, or touch the
 leaderboard — the destructive things live behind the operator menu below.
 
 #### The operator menu (SELECT)
 
-A cabinet has no keyboard, so clearing the leaderboard or shutting the game down
-used to mean SSHing into the Pi. Press **SELECT on the main menu** and a short
-list appears:
+A cabinet has no keyboard, so turning the sound off, clearing the leaderboard or
+shutting the game down used to mean SSHing into the Pi. Press **SELECT on the
+main menu** and a short list appears:
 
 | Option | Effect |
 |---|---|
+| **SOUND  ON** / **SOUND  OFF** | Turns audio on and off |
 | **CONTROLLER** | Switches the on-screen hints between keyboard and mat |
 | **RESET SCORES** | Wipes the leaderboard — gated behind a passcode, below |
 | **EXIT GAME** | Closes the game |
@@ -90,6 +100,22 @@ list appears:
 Navigate with the **up/down arrow panels** and choose with **SELECT**. It is only
 reachable from the main menu, so it can never interrupt a run, and it closes
 itself after 20 seconds of inactivity.
+
+##### SOUND — audio on and off
+
+This is where the mat's sound control lives, because there is no panel it can
+safely sit on — see [the shape panels](#the-shape-panels-do-nothing-during-play).
+A menu you can only open while standing still cannot be stepped on by accident.
+
+The row **is** the readout: it reads `SOUND  ON` or `SOUND  OFF`, and choosing it
+flips it in place. Unlike every other row the menu stays open, so the label
+changing under the cursor is the confirmation and one more press is the way back
+if a foot landed wrong. It leads the list because it is the only row anyone
+touches routinely and the only one a mis-press cannot cost anything.
+
+The setting is written to `data/settings.json` — the same `volume` key the `Q`
+key has always used — so it survives a restart. `Q` still works on a keyboard,
+and the two stay in step.
 
 ##### CONTROLLER — labelling for the mat
 
@@ -100,9 +126,9 @@ they become the panel names instead:
 | Screen | Keyboard | DDR pad |
 |---|---|---|
 | Main menu button | PRESS ENTER | PRESS START |
-| Main menu hint | PAUSE = [ESC]   🔈 = [Q] | PAUSE = [SELECT]   🔈 = [□] |
-| **In game** (below the score) | PAUSE = [ESC]   🔈 = [Q] | PAUSE = [SELECT]   🔈 = [□] |
-| **Pause overlay** | RESUME = [ESC]   🔈 = [Q] | RESUME = [SELECT]   🔈 = [□] |
+| Main menu hint | PAUSE = [ESC]   🔈 = [Q] | PAUSE = [SELECT]   🔈 |
+| **In game** (below the score) | PAUSE = [ESC]   🔈 = [Q] | PAUSE = [SELECT]   🔈 |
+| **Pause overlay** | RESUME = [ESC]   🔈 = [Q] | RESUME = [SELECT]   🔈 |
 | Name entry | ARROWS MOVE  ENTER PICK | ARROWS MOVE  START PICK |
 | This menu | ENTER PICKS / ESC CANCELS | SELECT PICKS / SELECT CANCELS |
 
@@ -113,7 +139,9 @@ pressing SELECT straight away is a no-op exit.
 
 The choice is saved in `data/settings.json` and survives a restart. Note that
 under the pad scheme, PAUSE is listed as SELECT: on the main menu that panel
-opens this operator menu instead, but during play it does pause.
+opens this operator menu instead, but during play it does pause. The pad rows
+show a bare speaker because the mat has no sound control to name — it still
+reports whether sound is on, and SOUND above is how you change it.
 
 ##### RESET SCORES
 
@@ -144,10 +172,12 @@ out. The file is read once at launch, so restart the game after editing it.
 Two details worth knowing if you change this:
 
 * The trigger and the code are read as **physical panels**, not as the eight
-  actions the rest of the game uses. On the measured mat the shapes are already
-  aliased to mute/pause/delete/select, so reading actions instead would toggle
-  mute and pause the game while the code was being entered. The panel table is
-  `panels` in `data/pad_mapping.json`, defaulting to the layout below.
+  actions the rest of the game uses. `✕` and `○` are still aliased to
+  delete/select, so reading actions instead would submit and erase letters while
+  the code was being entered — and `□` and `△` would resolve to nothing at all,
+  since they drive no action any more. The panel table is `panels` in
+  `data/pad_mapping.json`, defaulting to the layout below; it is independent of
+  `bindings`, which is why all four shapes still work as code panels.
 * SELECT is free to take here because it drives the **`pause`** action, and
   there is nothing to pause on the main menu. Everywhere else it still pauses.
   Note this is *not* the `select` action — that one is driven by START and the
@@ -210,7 +240,12 @@ mapping file without the raw log. For a DDR mat the prompts map to:
 | select | **START** | Start a game; confirm a letter |
 | delete | **X** | Delete a letter during name entry |
 | pause | **SELECT** | Pause during play |
-| mute | **□** | Toggle sound |
+| mute | *skip it* | Nothing — see below |
+
+Skip the `mute` prompt on a mat. Binding it to a shape panel is what the
+committed mapping used to do, and it is the mistake described under [the shape
+panels](#the-shape-panels-do-nothing-during-play); binding it to an arrow would
+mute the game every time you moved.
 
 It leaves `○`, `△` and the centre unbound — `pad_report.py` is the one that
 covers every panel. Press ESC (or wait) at any prompt to skip it. Either way, an action
@@ -249,14 +284,42 @@ PSX-to-USB board** (USB `0079:0006`, `Name="Microntek USB Joystick"`) wired to a
 | 1 | ↓ arrow | down |
 | 2 | ↑ arrow | up |
 | 3 | → arrow | right |
-| 4 | □ | mute |
-| 5 | △ | pause |
+| 4 | □ | *unbound* |
+| 5 | △ | *unbound* |
 | 6 | ✕ | delete |
 | 7 | ○ | select |
 | 8 | SELECT | pause |
 | 9 | START | select |
 
 Buttons 10 and 11 exist on the board but nothing on the mat is wired to them.
+
+##### The shape panels do nothing during play
+
+`□` and `△` are deliberately unbound, and `✕` and `○` drive actions that are
+no-ops outside the name-entry modal and the main menu. **Nothing that acts
+during a run is bound to a shape panel.**
+
+The four shapes are the mat's *corners*, and a corner shares an edge with the
+two arrows either side of it. A foot travelling between ← and ↓ clips the corner
+between them, so anything bound there fires by accident mid-run. `△` used to be
+a second `pause` binding and `□` used to be `mute`, both carried over from the
+gamepad layout this table started as, where the shapes are thumb buttons that
+nothing else is near.
+
+The pause case read as *random* rather than as a stuck panel, because two things
+hid the cause: pause is refused while the READY! text is up, so an early clip
+does nothing at all, and the on-screen hint only ever named SELECT. SELECT and
+START are edge panels — reaching them takes a deliberate step off the arrows —
+so they keep their actions.
+
+The cost is that **the mat has no sound panel**. Audio moved into the operator
+menu instead — [SOUND](#sound--audio-on-and-off), the first row — which is
+reachable from the mat with no keyboard and only from the main menu, so it cannot
+be stepped on mid-run. The pad hint stops *naming* a sound control to match, but
+keeps the speaker as a state light.
+
+All four shapes still work as operator-menu passcode panels, which read the
+separate `panels` table and are only reachable from the main menu.
 
 **The centre of the mat is an eleventh sensor**, and it is deliberately left
 unbound. It does not report as a button — stepping on it sends `axis 1 +1.0`,
@@ -353,7 +416,7 @@ Read it in that order — each line rules something out:
 |---|---|
 | `audio: OFF (...)` | The mixer never opened. The reason is in the brackets. |
 | `0 clips loaded` | The mixer opened but no audio decoded — check `assets/audio/`. |
-| `volume=0` | **The game is muted.** Q, or the square panel, toggles it. |
+| `volume=0` | **The game is muted.** SOUND in the operator menu, or `Q`. |
 | Looks correct, still silent | Routing — the sound is going somewhere that is not the TV. |
 
 ### Before any of the above: does the Pi play *anything*?

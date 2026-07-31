@@ -9,7 +9,14 @@ The sound row has no word: the speaker *is* the label, and it is struck through
 with a diagonal when muted, so the same glyph names the control and reports its
 state. That is the only place in the game that shows mute without spelling it
 out. The bracketed control is drawn rather than named wherever the mat has a
-shape printed on it - the square panel becomes a square.
+shape printed on it.
+
+A scheme may have no sound control at all - the pad does not, since the square
+panel was unbound for being a corner that feet kept clipping. The speaker then
+loses its bracket and stays on as a pure status light, still struck through when
+muted; the control itself moved into the operator menu:
+
+    PAUSE = [SELECT]   🔈
 
 The slash is drawn over the glyph rather than being a second glyph of its own: a
 diagonal legible at 5x7 needs the whole cell, which would leave nothing
@@ -37,7 +44,18 @@ def pause_hint(scheme, verb='PAUSE'):
 
 
 def sound_hint(scheme):
-    """`🔈 = [Q]` - the speaker is both the label and the on/off indicator."""
+    """`🔈 = [Q]`, or a bare `🔈` on a scheme with no sound control.
+
+    The speaker was always doing two jobs - naming the control and, by being
+    struck through, reporting whether sound is on. The pad scheme has no control
+    to name since the square panel was unbound, but the *state* still matters:
+    an operator glancing at a silent cabinet needs to know whether it is muted
+    or broken. So the bracketed control drops away and the speaker stays,
+    reading as a status light rather than a label. Sound is turned on and off
+    from the operator menu under that scheme - see `ui/system_menu.py`.
+    """
+    if not scheme.sound_icon:
+        return SPEAKER
     return f'{SPEAKER} = [{scheme.sound_icon}]'
 
 
