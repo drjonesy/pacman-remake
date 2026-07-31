@@ -75,9 +75,20 @@ it lives in `data/pad_mapping.json` and is written by stepping on each panel.
 ```
 
 [`tools/pad_report.py`](tools/pad_report.py) is the one to reach for first when
-a pad misbehaves. It walks all ten panels, logs **every raw event** each one
-produced with timestamps, and writes `pad-report.txt` — which is shareable, and
-shows the things a finished mapping hides: a panel that bounces and sends one
+a pad misbehaves. It walks all ten panels one at a time, **waiting for ENTER
+between each** rather than racing ahead — so there is time to read what a panel
+recorded, and `r` re-records it if the step did not land. `q` stops early and
+still writes everything reached; `--auto` advances unattended.
+
+| At the prompt | |
+|---|---|
+| `ENTER` | next panel |
+| `r` | re-record the panel just done (the old log is kept, marked superseded) |
+| `q` | stop here and write the report |
+
+It logs **every raw event** each panel produced with timestamps, and writes
+`pad-report.txt` — which is shareable, and shows the things a finished mapping
+hides: a panel that bounces and sends one
 press three times, a panel that reports on both a hat and an axis, a switch that
 latches instead of releasing, and an axis sitting at full deflection while
 untouched. It writes a working `data/pad_mapping.json` as it goes, so a clean

@@ -8,6 +8,11 @@ plain-text report you can paste into a bug report or an email.
 
     python3 tools/pad_report.py
 
+It waits for ENTER between panels rather than advancing on its own, so there is
+time to read what each one recorded before committing to it - and `r` re-records
+the panel you just did, which is the whole reason for the pause. `--auto`
+restores unattended advancing.
+
 It also writes a ready-to-use `data/pad_mapping.json` from what it recorded, so
 a successful run leaves the game playable without a second step. Pass
 `--no-mapping` to only produce the report.
@@ -45,11 +50,12 @@ PANELS = (
 )
 
 # Stop recording a panel once it has been quiet this long. Long enough to catch
-# a bouncing switch sending the same press twice, short enough not to drag.
-QUIET_MS = 700
-# Give up on a panel after this and move on, so an unplugged or dead panel
-# cannot stall the whole run. There is no keyboard over SSH to skip with.
-PANEL_TIMEOUT_MS = 20_000
+# a bouncing switch sending the same press twice, and to let a slow step-off
+# land in the same capture rather than leaking into the next panel's.
+QUIET_MS = 1200
+# Give up waiting for a panel's *first* event after this. Generous, because the
+# gap between confirming at the keyboard and standing back on the mat is real.
+PANEL_TIMEOUT_MS = 45_000
 # An axis has to travel this far from centre to count as pressed.
 DEADZONE = 0.5
 
@@ -103,6 +109,93 @@ def init_display():
         except pygame.error:
             pass
         return False
+
+
+def read_line_without_freezing(windowed):
+    """Blocks for a line on stdin while keeping the pygame window alive.
+
+    A bare `input()` would stall the event loop, so the window stops redrawing
+    and the desktop paints it as hung - and any pad events that arrive while
+    blocked would queue up and leak into the next capture. Polling stdin with
+    `select` avoids both: events are pumped and discarded until a line lands.
+
+    Falls back to `input()` where stdin cannot be polled (no tty, or Windows),
+    and returns None at EOF so a piped or detached run does not spin.
+    """
+    try:
+        import select
+        pollable = sys.stdin.isatty()
+    except (ImportError, ValueError):
+        pollable = False
+
+    if not pollable:
+        try:
+            return input()
+        except EOFError:
+            return None
+
+    while True:
+        # Pumped and dropped: the pad is being stepped off during this window
+        # and none of that belongs to the panel just recorded, or the next one.
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                raise KeyboardInterrupt
+            if event.type == pygame.KEYDOWN and event.key in (
+                pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE,
+            ):
+                return ''
+        if windowed:
+            pygame.display.flip()
+
+        ready, _, _ = select.select([sys.stdin], [], [], 0.05)
+        if ready:
+            line = sys.stdin.readline()
+            if line == '':
+                return None
+            return line.strip()
+
+
+def confirm(out, name, captured, windowed, last):
+    """Waits for the go-ahead before moving to the next panel.
+
+    Returns 'next', 'redo', or 'quit'. Nothing advances on its own - a report
+    is worth more when the person making it had time to see each panel land.
+    """
+    nothing = not captured
+    if last:
+        choices = 'ENTER = finish,  r = redo this panel,  q = finish now'
+    else:
+        choices = 'ENTER = next panel,  r = redo this panel,  q = stop here'
+
+    banner(windowed, [
+        f'{name}: {"nothing recorded" if nothing else "recorded"}',
+        'Press ENTER for the next panel.',
+        'r = redo,  q = stop',
+    ])
+
+    while True:
+        print()
+        if nothing:
+            print(f'    {name} recorded nothing. Press r to try it again if the')
+            print('    panel exists, or ENTER to move on.')
+        print(f'    [{choices}]')
+        print('    > ', end='', flush=True)
+
+        answer = read_line_without_freezing(windowed)
+        if answer is None:
+            # No stdin to wait on - a piped run must not spin here.
+            print('(no terminal input available; continuing)')
+            return 'next'
+
+        answer = answer.strip().lower()
+        if answer in ('', 'n', 'next'):
+            return 'next'
+        if answer in ('r', 'redo', 'again'):
+            out.quiet(f'    (redo requested - the {name} log above is superseded)')
+            return 'redo'
+        if answer in ('q', 'quit', 'stop', 'done'):
+            return 'quit'
+        print(f'    "{answer}"? Expected ENTER, r, or q.')
 
 
 def banner(windowed, lines):
@@ -302,7 +395,7 @@ def walk_panel(out, name, prompt, stuck_axes, windowed):
     """Records everything one panel sends. Returns (bindings, raw_lines)."""
     out()
     out(f'--- {name} ---')
-    print(f'    step on {prompt} ...')
+    print(f'    Step on {prompt}, then step off. Waiting ...')
     banner(windowed, [f'Step on: {name}', prompt, '', 'Then step off.'])
 
     pygame.event.clear()
@@ -425,11 +518,19 @@ def parse_args(argv=None):
                         help='where to write the generated mapping')
     parser.add_argument('--no-mapping', action='store_true',
                         help='write the report only, and change nothing else')
+    parser.add_argument('--auto', action='store_true',
+                        help='advance automatically instead of waiting for ENTER '
+                             'between panels (no redo, no stopping early)')
+    parser.add_argument('--quiet-ms', type=int, default=QUIET_MS, metavar='N',
+                        help=f'stop recording a panel after this much silence '
+                             f'(default: {QUIET_MS})')
     return parser.parse_args(argv)
 
 
 def main(argv=None):
+    global QUIET_MS
     args = parse_args(argv)
+    QUIET_MS = max(100, args.quiet_ms)
 
     pygame.init()
     windowed = init_display()
@@ -450,18 +551,43 @@ def main(argv=None):
     out('-' * 68)
     out('PANEL WALK')
     out('-' * 68)
-    out('Each panel: step on it, then step off. Recording stops once the pad')
-    out(f'goes quiet. A panel with nothing on it is skipped after '
+    out('Each panel: step on it, then step off. Recording for that panel stops')
+    out(f'once the pad has been quiet for {QUIET_MS}ms.')
+    if args.auto:
+        out('Advancing automatically (--auto).')
+    else:
+        out('Then press ENTER at the terminal for the next one - nothing moves')
+        out('on until you do. r re-records the panel you just did, q stops.')
+    out(f'A panel that sends nothing at all is given up on after '
         f'{PANEL_TIMEOUT_MS // 1000}s.')
     out.quiet('')
     out.quiet('Raw events per panel follow, timestamped from the prompt.')
 
     results = {}
     completed = True
+    index = 0
     try:
-        for name, prompt, _ in PANELS:
+        while index < len(PANELS):
+            name, prompt, _ = PANELS[index]
             bindings, _raw = walk_panel(out, name, prompt, stuck_axes, windowed)
             results[name] = bindings
+
+            if args.auto:
+                index += 1
+                continue
+
+            choice = confirm(out, name, bindings, windowed,
+                             last=index == len(PANELS) - 1)
+            if choice == 'redo':
+                continue                      # same panel, recorded again
+            if choice == 'quit':
+                completed = index == len(PANELS) - 1
+                if not completed:
+                    out()
+                    out(f'*** stopped after {name} - {len(PANELS) - index - 1} '
+                        f'panel(s) not reached ***')
+                break
+            index += 1
     except KeyboardInterrupt:
         completed = False
         out()
